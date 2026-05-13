@@ -13,14 +13,35 @@
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot, deleteDoc, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Mencegah error saat dihosting di GitHub
+        // =====================================================================
+        // KONFIGURASI FIREBASE PRIBADI (UNTUK GITHUB / HOSTING LUAR)
+        // =====================================================================
+        const myFirebaseConfig = {
+            apiKey: "API_KEY_ANDA",
+            authDomain: "AUTH_DOMAIN_ANDA",
+            projectId: "PROJECT_ID_ANDA",
+            storageBucket: "STORAGE_BUCKET_ANDA",
+            messagingSenderId: "MESSAGING_SENDER_ID_ANDA",
+            appId: "APP_ID_ANDA"
+        };
+        // =====================================================================
+
+        let activeFirebaseConfig = null;
+        let appId = "adrisya-invoice-app";
+
+        // Mencegah error saat dihosting di GitHub & Memilih konfigurasi
         if (typeof __firebase_config !== 'undefined') {
+            activeFirebaseConfig = JSON.parse(__firebase_config);
+            appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        } else if (myFirebaseConfig.apiKey !== "API_KEY_ANDA") {
+            activeFirebaseConfig = myFirebaseConfig;
+        }
+
+        if (activeFirebaseConfig) {
             try {
-                const firebaseConfig = JSON.parse(__firebase_config);
-                const app = initializeApp(firebaseConfig);
+                const app = initializeApp(activeFirebaseConfig);
                 const auth = getAuth(app);
                 const dbFirestore = getFirestore(app);
-                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
                 window.currentUser = null;
 
@@ -84,8 +105,11 @@
                     await setDoc(docRef, { lastInvNumber: num }, { merge: true });
                 };
             } catch (e) {
+                console.log("Error Inisialisasi Firebase: ", e);
                 console.log("Menjalankan Mode Offline / Local Storage");
             }
+        } else {
+            console.log("Konfigurasi Firebase belum diisi. Menjalankan Mode Offline / Local Storage");
         }
     </script>
 
