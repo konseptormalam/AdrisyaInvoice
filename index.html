@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice Management System - Adrisya</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot, deleteDoc, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Variabel global yang disediakan oleh lingkungan
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const dbFirestore = getFirestore(app);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+        // State Global
+        window.db = [];
+        window.currentUser = null;
+
+        // OTENTIKASI (ATURAN 3)
+        const initAuth = async () => {
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                await signInWithCustomToken(auth, __initial_auth_token);
+            } else {
+                await signInAnonymously(auth);
+            }
+        };
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                window.currentUser = user;
+                // Jalankan Listener setelah Auth berhasil
+                initFirestoreListeners();
+            }
+        });
+
+        initAuth();
+
+        // FIRESTORE LISTENERS (ATURAN 1 & 2)
+        function initFirestoreListeners() {
+            // Monitor Invoices (Jalur Data Publik)
+            const invoicesRef = collection(dbFirestore, 'artifacts', appId, 'public', 'data', 'invoices');
+            onSnapshot(invoicesRef, (snapshot) => {
+                window.db = snapshot.docs.map(doc => doc.data());
+                
+                // Perbarui dashboard secara otomatis
+                if (typeof refreshDashboard === 'function') refreshDashboard();
+                
+                const activeSection = document.querySelector('.section-content:not(.hidden)');
+                if (activeSection) {
+                    const id = activeSection.id;
+                    if (id === 'viewAllInvoices') renderTable('tableAllInvoices', 'ALL');
+                    if (id === 'viewLunas') renderTable('tableLunas', 'LUNAS_ONLY');
+                    if (id === 'viewCalendar') renderCalendar();
+                    if (id === 'viewHome') refreshDashboard();
+                }
+            }, (error) => console.error("Firestore Error:", error));
+
+            // Monitor Settings (Nomor Urut Terakhir)
+            const settingsRef = doc(dbFirestore, 'artifacts', appId, 'public', 'data', 'settings', 'invoice_config');
+            onSnapshot(settingsRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    document.getElementById('lastNumber').value = data.lastInvNumber || 0;
+                }
+            });
+        }
+
+        // AKSI CLOUD
+        window.saveToCloud = async (invData) => {
+            if (!window.currentUser) return;
+            const docRef = doc(dbFirestore, 'artifacts', appId, 'public', 'data', 'invoices', invData.id);
+            await setDoc(docRef, invData);
+        };
+
+        window.deleteFromCloud = async (id) => {
+            if (!window.currentUser) return;
+            const docRef = doc(dbFirestore, 'artifacts', appId, 'public', 'data', 'invoices', id);
+            await deleteDoc(docRef);
+        };
+
+        window.updateLastNumberCloud = async (num) => {
+            if (!window.currentUser) return;
+            const docRef = doc(dbFirestore, 'artifacts', appId, 'public', 'data', 'settings', 'invoice_config');
+            await setDoc(docRef, { lastInvNumber: num }, { merge: true });
+        };
+
+    </script>
+
+    <style>
+        /* Gaya khusus untuk watermark */
+        .watermark {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-30deg);
+            font-size: 8rem;
+            font-weight: 900;
+            color: rgba(220, 38, 38, 0.15); /* Warna merah transparan */
+            border: 12px solid rgba(220, 38, 38, 0.15);
+            padding: 10px 40px;
+            border-radius: 20px;
+            pointer-events: none;
+            display: none;
+            text-transform: uppercase;
+            z-index: 0;
+            letter-spacing: 0.5rem;
+        }
+
+        /* Sidebar & Menu active state */
+        .nav-active {
+            background-color: #c5a059;
+            color: white !important;
+        }
+
+        @media print {
+            .no-print { display: none !important; }
+            
+            @page {
+                size: auto;
+                margin: 5mm 10mm;
+            }
+            
+            body { 
+                background: white !important; 
+                padding: 0 !important; 
+                margin: 0 !important;
+            }
+
+            .print-area { 
+                border: none !important; 
+                box-shadow: none !important; 
+                position: relative !important; 
+                width: 100% !important;
+                max-width: 100% !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+
+            #invoice {
+                page-break-inside: avoid;
+            }
+
+            #watermarkLunas {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans">
+
+    <!-- LAYAR LOGIN -->
+    <div id="loginOverlay" class="fixed inset-0 z-[100] bg-gray-100 flex items-center justify-center no-print">
+        <div class="bg-white p-8 rounded-2xl shadow-xl border border-gray-200 w-full max-w-md">
+            <div class="flex justify-center mb-6">
+                <img src="https://lh3.googleusercontent.com/d/1UCgEa8Zs3IfwbUfk911JYhhJqSuqH5ZD" alt="Logo Adrisya" class="h-20 w-20 object-contain rounded-full border-2 border-brand-yellow">
+            </div>
+            <h2 class="text-2xl font-bold text-center text-gray-800 mb-2">Adrisya Decoration</h2>
+            <p class="text-gray-500 text-center mb-8 text-sm">Silakan masukkan kredensial Adrisya Decoration</p>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Username</label>
+                    <input type="text" id="userInput" class="mt-1 block w-full p-3 border border-gray-300 rounded-lg focus:ring-yellow-500 focus:border-yellow-500 outline-none transition" placeholder="Username">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Password</label>
+                    <input type="password" id="passInput" class="mt-1 block w-full p-3 border border-gray-300 rounded-lg focus:ring-yellow-500 focus:border-yellow-500 outline-none transition" placeholder="••••••••">
+                </div>
+                <div id="loginError" class="text-red-500 text-xs hidden italic">Username atau Password salah!</div>
+                <button onclick="checkLogin()" class="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 rounded-lg shadow-lg shadow-yellow-600/20 transition duration-300">MASUK APLIKASI</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- KONTEN UTAMA -->
+    <div id="mainApp" class="hidden min-h-screen flex flex-col md:flex-row">
+        
+        <!-- SIDEBAR NAVIGASI -->
+        <aside class="w-full md:w-64 bg-white border-r border-gray-200 no-print flex-shrink-0">
+            <div class="p-6">
+                <div class="flex items-center gap-3 mb-8">
+                    <img src="https://lh3.googleusercontent.com/d/1UCgEa8Zs3IfwbUfk911JYhhJqSuqH5ZD" class="h-10 w-10 rounded-full" alt="Logo">
+                    <span class="font-bold text-lg text-gray-800 tracking-tight">ADRISYA</span>
+                </div>
+                
+                <nav class="space-y-2">
+                    <button onclick="showSection('viewHome')" id="btnHome" class="w-full text-left px-4 py-3 rounded-xl text-gray-600 hover:bg-gray-50 flex items-center gap-3 transition font-medium">
+                        <i class="fas fa-home w-5"></i> Beranda
+                    </button>
+                    <button onclick="showSection('viewAllInvoices')" id="btnAllInvoices" class="w-full text-left px-4 py-3 rounded-xl text-gray-600 hover:bg-gray-50 flex items-center gap-3 transition font-medium">
+                        <i class="fas fa-file-invoice w-5"></i> Daftar Invoice
+                    </button>
+                    <button onclick="showSection('viewLunas')" id="btnLunas" class="w-full text-left px-4 py-3 rounded-xl text-gray-600 hover:bg-gray-50 flex items-center gap-3 transition font-medium">
+                        <i class="fas fa-check-circle w-5"></i> Lunas
+                    </button>
+                    <button onclick="showSection('viewCalendar')" id="btnCalendar" class="w-full text-left px-4 py-3 rounded-xl text-gray-600 hover:bg-gray-50 flex items-center gap-3 transition font-medium">
+                        <i class="fas fa-calendar-alt w-5"></i> Kalender Event
+                    </button>
+                    <div class="pt-6 border-t border-gray-100">
+                        <button onclick="openEditor()" class="w-full bg-yellow-600 text-white px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-yellow-700 transition shadow-lg shadow-yellow-600/20">
+                            <i class="fas fa-plus"></i> Buat Baru
+                        </button>
+                    </div>
+                </nav>
+            </div>
+        </aside>
+
+        <!-- AREA KONTEN -->
+        <main class="flex-grow p-6 md:p-10 overflow-y-auto">
+            
+            <!-- SECTION: BERANDA -->
+            <section id="viewHome" class="space-y-8 section-content">
+                <div class="flex justify-between items-center">
+                    <h1 class="text-3xl font-bold text-gray-800">Ringkasan Bisnis</h1>
+                    <p id="currentDateDisplay" class="text-gray-500 font-medium"></p>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+                        <p class="text-sm font-bold text-gray-400 uppercase tracking-widest">Menunggu Pembayaran</p>
+                        <h2 id="statsPending" class="text-3xl font-bold text-gray-800 mt-2">0</h2>
+                        <p class="text-xs text-red-500 mt-1 font-medium italic">Belum dibayar sama sekali</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+                        <p class="text-sm font-bold text-gray-400 uppercase tracking-widest">Dalam Cicilan / DP</p>
+                        <h2 id="statsDP" class="text-3xl font-bold text-gray-800 mt-2">0</h2>
+                        <p class="text-xs text-yellow-600 mt-1 font-medium italic">Sudah bayar sebagian</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm border-l-4 border-l-green-500">
+                        <p class="text-sm font-bold text-gray-400 uppercase tracking-widest">Total Lunas</p>
+                        <h2 id="statsLunas" class="text-3xl font-bold text-green-600 mt-2">0</h2>
+                        <p class="text-xs text-gray-500 mt-1 font-medium italic">Selesai 100%</p>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+                    <div class="p-6 border-b border-gray-100">
+                        <h3 class="font-bold text-gray-800">Aktivitas Terakhir</h3>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left">
+                            <thead class="bg-gray-50 text-gray-400 text-xs uppercase font-bold">
+                                <tr>
+                                    <th class="px-6 py-4">No. Invoice</th>
+                                    <th class="px-6 py-4">Customer</th>
+                                    <th class="px-6 py-4">Tipe</th>
+                                    <th class="px-6 py-4 text-right">Total</th>
+                                    <th class="px-6 py-4">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="homeRecentTable" class="text-sm divide-y divide-gray-100"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION: SEMUA INVOICE -->
+            <section id="viewAllInvoices" class="hidden section-content space-y-6">
+                <h1 class="text-2xl font-bold text-gray-800">Semua Daftar Invoice</h1>
+                <div class="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+                    <table class="w-full text-left">
+                        <thead class="bg-gray-50 text-gray-400 text-xs uppercase font-bold">
+                            <tr>
+                                <th class="px-6 py-4">Nomor</th>
+                                <th class="px-6 py-4">Tipe</th>
+                                <th class="px-6 py-4">Customer</th>
+                                <th class="px-6 py-4">Event</th>
+                                <th class="px-6 py-4 text-right">Tagihan</th>
+                                <th class="px-6 py-4">Status</th>
+                                <th class="px-6 py-4 text-center">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableAllInvoices" class="text-sm divide-y divide-gray-100"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- SECTION: LUNAS -->
+            <section id="viewLunas" class="hidden section-content space-y-6">
+                <h1 class="text-2xl font-bold text-gray-800">Pembayaran Lunas</h1>
+                <div class="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+                    <table class="w-full text-left">
+                        <thead class="bg-gray-50 text-gray-400 text-xs uppercase font-bold">
+                            <tr>
+                                <th class="px-6 py-4">Nomor</th>
+                                <th class="px-6 py-4">Customer</th>
+                                <th class="px-6 py-4 text-center">Tipe</th>
+                                <th class="px-6 py-4 text-right">Total</th>
+                                <th class="px-6 py-4 text-center">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableLunas" class="text-sm divide-y divide-gray-100"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- SECTION: KALENDER -->
+            <section id="viewCalendar" class="hidden section-content space-y-6">
+                <h1 class="text-2xl font-bold text-gray-800">Kalender Event (Lunas)</h1>
+                <div class="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+                    <div class="flex items-center justify-between mb-8">
+                        <h2 id="calendarMonthYear" class="text-xl font-bold text-gray-700 uppercase tracking-widest">Mei 2026</h2>
+                        <div class="flex gap-2">
+                            <button onclick="prevMonth()" class="p-2 hover:bg-gray-100 rounded-full transition"><i class="fas fa-chevron-left text-gray-400"></i></button>
+                            <button onclick="nextMonth()" class="p-2 hover:bg-gray-100 rounded-full transition"><i class="fas fa-chevron-right text-gray-400"></i></button>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-7 gap-px bg-gray-100 rounded-lg overflow-hidden border border-gray-100" id="calendarGrid">
+                        <div class="bg-gray-50 p-2 text-center text-xs font-bold text-gray-400 uppercase">Min</div>
+                        <div class="bg-gray-50 p-2 text-center text-xs font-bold text-gray-400 uppercase">Sen</div>
+                        <div class="bg-gray-50 p-2 text-center text-xs font-bold text-gray-400 uppercase">Sel</div>
+                        <div class="bg-gray-50 p-2 text-center text-xs font-bold text-gray-400 uppercase">Rab</div>
+                        <div class="bg-gray-50 p-2 text-center text-xs font-bold text-gray-400 uppercase">Kam</div>
+                        <div class="bg-gray-50 p-2 text-center text-xs font-bold text-gray-400 uppercase">Jum</div>
+                        <div class="bg-gray-50 p-2 text-center text-xs font-bold text-gray-400 uppercase">Sab</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION: EDITOR -->
+            <section id="viewEditor" class="hidden section-content space-y-6 pb-20">
+                <div class="no-print bg-white p-6 rounded-2xl shadow-sm border border-gray-200 mb-6 flex flex-col md:flex-row gap-4 items-end">
+                    <div class="flex-grow grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 font-bold uppercase tracking-widest text-[10px]">Tipe Dokumen</label>
+                            <select id="docType" class="mt-1 block w-full border-gray-300 rounded-lg shadow-sm focus:ring-yellow-500 focus:border-yellow-500 sm:text-sm p-3 border font-bold" onchange="updateView()">
+                                <option value="PROFORMA INVOICE">Proforma Invoice</option>
+                                <option value="INVOICE">Invoice</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 font-bold uppercase tracking-widest text-[10px]">Status Bayar</label>
+                            <select id="payStatus" class="mt-1 block w-full border-gray-300 rounded-lg shadow-sm focus:ring-yellow-500 focus:border-yellow-500 sm:text-sm p-3 border font-bold" onchange="toggleLunas()">
+                                <option value="PENDING">Pending</option>
+                                <option value="LUNAS">Lunas</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 font-bold uppercase tracking-widest text-[10px]">Nomor Urut</label>
+                            <input type="number" id="lastNumber" class="mt-1 block w-full border-gray-300 rounded-lg shadow-sm focus:ring-yellow-500 focus:border-yellow-500 sm:text-sm p-3 border" value="0">
+                        </div>
+                        <div>
+                            <button onclick="generateNewNumber()" class="w-full bg-yellow-600 text-white h-[46px] rounded-lg hover:bg-yellow-700 transition font-bold shadow-sm">Nomor Baru</button>
+                        </div>
+                    </div>
+                    <div class="flex gap-2 w-full md:w-auto">
+                        <button onclick="saveCurrentInvoice()" class="flex-grow md:flex-grow-0 bg-green-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-green-700 transition flex items-center gap-2 justify-center">
+                            <i class="fas fa-cloud-upload-alt"></i> Simpan Ke Awan
+                        </button>
+                        <button onclick="window.print()" class="flex-grow md:flex-grow-0 bg-gray-800 text-white px-6 py-3 rounded-lg font-bold hover:bg-black transition flex items-center gap-2 justify-center">
+                            <i class="fas fa-print"></i> Cetak / PDF
+                        </button>
+                    </div>
+                </div>
+
+                <!-- AREA CETAK -->
+                <div class="max-w-4xl mx-auto bg-white p-12 shadow-lg border border-gray-200 print-area relative" id="invoice">
+                    <div id="watermarkLunas" class="watermark">LUNAS</div>
+                    <div class="flex justify-between items-start border-b-2 border-gray-100 pb-8">
+                        <div class="flex items-center gap-4">
+                            <img src="https://lh3.googleusercontent.com/d/1UCgEa8Zs3IfwbUfk911JYhhJqSuqH5ZD" alt="Logo Adrisya" class="h-16 w-16 object-contain rounded-full border border-brand-yellow/30">
+                            <div>
+                                <h1 class="text-3xl font-bold text-gray-800 tracking-tight uppercase" id="viewDocType">PROFORMA INVOICE</h1>
+                                <p class="text-gray-500 mt-1">No: <span id="viewInvoiceNumber" class="font-mono font-bold text-gray-800 uppercase">INV-2026-000</span></p>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <h2 class="text-xl font-bold text-yellow-600 uppercase tracking-widest">Adrisya Decoration</h2>
+                            <p class="text-sm text-gray-600">Banyuwangi, Jawa Timur</p>
+                            <p class="text-sm text-gray-600 font-medium">WA: 0896-6963-6206</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-8 mt-10">
+                        <div>
+                            <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider">Ditujukan Kepada:</h3>
+                            <input type="text" id="custName" class="block w-full mt-1 font-bold text-lg focus:bg-gray-50 p-1 outline-none" placeholder="Nama Pelanggan">
+                            <textarea id="custAddr" class="block w-full mt-1 text-gray-600 focus:bg-gray-50 p-1 outline-none" rows="2" placeholder="Alamat Pelanggan"></textarea>
+                        </div>
+                        <div class="text-right space-y-4">
+                            <div>
+                                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider">Tanggal Invoice:</h3>
+                                <input type="date" id="invoiceDate" class="mt-1 font-bold text-gray-800 text-right outline-none">
+                            </div>
+                            <div>
+                                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider">Tanggal Event:</h3>
+                                <input type="date" id="eventDate" class="mt-1 font-bold text-yellow-600 text-right outline-none">
+                            </div>
+                        </div>
+                    </div>
+
+                    <table class="w-full mt-12 text-left border-collapse">
+                        <thead>
+                            <tr class="border-b-2 border-gray-800">
+                                <th class="py-3 text-sm font-bold text-gray-800 uppercase tracking-widest">Deskripsi Layanan / Barang</th>
+                                <th class="py-3 text-sm font-bold text-gray-800 text-center w-24 uppercase">Qty</th>
+                                <th class="py-3 text-sm font-bold text-gray-800 text-right w-40 uppercase">Harga</th>
+                                <th class="py-3 text-sm font-bold text-gray-800 text-right w-40 uppercase">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody id="itemRows">
+                            <tr class="border-b border-gray-100">
+                                <td class="py-4">
+                                    <select class="w-full font-bold outline-none bg-transparent mb-1 appearance-none cursor-pointer prod-select">
+                                        <option value="">-- Pilih Produk --</option>
+                                        <option value="Tray Putih">Tray Putih</option>
+                                        <option value="Tray Crystal">Tray Crystal</option>
+                                        <option value="Hidden Tray (Kain)">Hidden Tray (Kain)</option>
+                                        <option value="Hidden Box Ukir">Hidden Box Ukir</option>
+                                        <option value="Kreasi Mahar">Kreasi Mahar</option>
+                                        <option value="Custom / Lainnya">Custom / Lainnya</option>
+                                    </select>
+                                    <textarea class="w-full text-xs text-gray-500 outline-none italic bg-transparent resize-none overflow-hidden spec-req" rows="1" placeholder="Spesial request customer (opsional)..." oninput='this.style.height = "";this.style.height = this.scrollHeight + "px"'></textarea>
+                                </td>
+                                <td class="py-4 text-center align-top"><input type="number" value="1" class="w-full text-center outline-none qty" oninput="calculate()"></td>
+                                <td class="py-4 text-right align-top"><input type="number" value="0" class="w-full text-right outline-none price" oninput="calculate()"></td>
+                                <td class="py-4 text-right font-bold total-row align-top">Rp 0</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <button onclick="addRow()" class="mt-4 text-yellow-600 font-bold text-sm no-print">+ Tambah Baris</button>
+
+                    <div class="mt-12 flex justify-end">
+                        <div class="w-72 space-y-3">
+                            <div class="flex justify-between text-gray-600">
+                                <span>Subtotal</span>
+                                <span id="subtotal" class="font-bold">Rp 0</span>
+                            </div>
+                            <div class="flex justify-between items-center text-gray-600">
+                                <span>DP (Uang Muka)</span>
+                                <div class="flex items-center gap-1">
+                                    <span class="text-gray-400">- Rp</span>
+                                    <input type="number" id="dpAmount" value="0" class="w-24 text-right font-bold outline-none bg-gray-50 rounded px-1" oninput="calculate()">
+                                </div>
+                            </div>
+                            <div class="flex justify-between items-center text-gray-600">
+                                <span>Pelunasan</span>
+                                <div class="flex items-center gap-1">
+                                    <span class="text-gray-400">- Rp</span>
+                                    <input type="number" id="settlementAmount" value="0" class="w-24 text-right font-bold outline-none bg-gray-50 rounded px-1" oninput="calculate()">
+                                </div>
+                            </div>
+                            <div class="flex justify-between border-t-2 border-yellow-600 pt-3 text-xl font-bold text-gray-800 uppercase tracking-tighter">
+                                <span id="labelTotal">SISA BAYAR</span>
+                                <span id="grandTotal">Rp 0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-20 grid grid-cols-2 items-end">
+                        <div class="text-sm text-gray-500 italic">
+                            <p class="font-bold text-gray-800 not-italic uppercase tracking-widest text-xs">Informasi Pembayaran:</p>
+                            <div class="mt-2 p-3 bg-gray-50 rounded-lg border border-gray-100 inline-block not-italic">
+                                <p class="text-gray-700 font-bold text-base">SeaBank</p>
+                                <p class="text-gray-800 font-mono text-lg tracking-wider">901400783663</p>
+                                <p class="text-gray-600 text-[10px] mt-1 uppercase">a/n Adellia Sartika Putri</p>
+                            </div>
+                        </div>
+                        <div class="text-center">
+                            <p class="text-gray-800">Hormat Kami,</p>
+                            <div class="h-24"></div>
+                            <p class="font-bold text-gray-800 border-t border-gray-200 inline-block px-10 pt-1">Adrisya Decoration</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <script>
+        // Kredensial Login
+        const validUser = "admin";
+        const validPass = "adrisya123";
+
+        let calCurrentDate = new Date();
+
+        function checkLogin() {
+            const user = document.getElementById('userInput').value;
+            const pass = document.getElementById('passInput').value;
+            if (user === validUser && pass === validPass) {
+                document.getElementById('loginOverlay').style.display = "none";
+                document.getElementById('mainApp').classList.remove('hidden');
+                initApp();
+            } else {
+                document.getElementById('loginError').classList.remove('hidden');
+            }
+        }
+
+        document.addEventListener('keypress', e => { if (e.key === 'Enter') checkLogin(); });
+
+        function initApp() {
+            document.getElementById('currentDateDisplay').innerText = new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+            showSection('viewHome');
+            refreshDashboard();
+            renderCalendar();
+        }
+
+        function showSection(id) {
+            document.querySelectorAll('.section-content').forEach(s => s.classList.add('hidden'));
+            document.getElementById(id).classList.remove('hidden');
+            
+            document.querySelectorAll('aside nav button').forEach(b => b.classList.remove('nav-active'));
+            const btnMap = { 'viewHome': 'btnHome', 'viewAllInvoices': 'btnAllInvoices', 'viewLunas': 'btnLunas', 'viewCalendar': 'btnCalendar' };
+            if(btnMap[id]) document.getElementById(btnMap[id]).classList.add('nav-active');
+            
+            if(id === 'viewAllInvoices') renderTable('tableAllInvoices', 'ALL');
+            if(id === 'viewLunas') renderTable('tableLunas', 'LUNAS_ONLY');
+            if(id === 'viewCalendar') renderCalendar();
+            if(id === 'viewHome') refreshDashboard();
+        }
+
+        function openEditor() {
+            resetEditor();
+            showSection('viewEditor');
+        }
+
+        function resetEditor() {
+            document.getElementById('viewInvoiceNumber').innerText = "INV-" + new Date().getFullYear() + "-000";
+            document.getElementById('custName').value = "";
+            document.getElementById('custAddr').value = "";
+            document.getElementById('dpAmount').value = 0;
+            document.getElementById('settlementAmount').value = 0;
+            document.getElementById('invoiceDate').valueAsDate = new Date();
+            document.getElementById('eventDate').value = "";
+            document.getElementById('docType').value = "PROFORMA INVOICE";
+            document.getElementById('payStatus').value = "PENDING";
+            document.getElementById('itemRows').innerHTML = `
+                <tr class="border-b border-gray-100">
+                    <td class="py-4">
+                        <select class="w-full font-bold outline-none bg-transparent mb-1 appearance-none cursor-pointer prod-select">
+                            <option value="">-- Pilih Produk --</option>
+                            <option value="Tray Putih">Tray Putih</option>
+                            <option value="Tray Crystal">Tray Crystal</option>
+                            <option value="Hidden Tray (Kain)">Hidden Tray (Kain)</option>
+                            <option value="Hidden Box Ukir">Hidden Box Ukir</option>
+                            <option value="Kreasi Mahar">Kreasi Mahar</option>
+                            <option value="Custom / Lainnya">Custom / Lainnya</option>
+                        </select>
+                        <textarea class="w-full text-xs text-gray-500 outline-none italic bg-transparent resize-none overflow-hidden spec-req" rows="1" placeholder="Spesial request customer (opsional)..." oninput='this.style.height = "";this.style.height = this.scrollHeight + "px"'></textarea>
+                    </td>
+                    <td class="py-4 text-center align-top"><input type="number" value="1" class="w-full text-center outline-none qty" oninput="calculate()"></td>
+                    <td class="py-4 text-right align-top"><input type="number" value="0" class="w-full text-right outline-none price" oninput="calculate()"></td>
+                    <td class="py-4 text-right font-bold total-row align-top">Rp 0</td>
+                </tr>
+            `;
+            updateView();
+            toggleLunas();
+            calculate();
+        }
+
+        async function saveCurrentInvoice() {
+            const items = [];
+            document.querySelectorAll('#itemRows tr').forEach(row => {
+                items.push({
+                    product: row.querySelector('.prod-select').value,
+                    request: row.querySelector('.spec-req').value,
+                    qty: parseFloat(row.querySelector('.qty').value) || 0,
+                    price: parseFloat(row.querySelector('.price').value) || 0
+                });
+            });
+
+            const sub = parseFloat(document.getElementById('subtotal').innerText.replace(/[^0-9]/g, ''));
+            const dp = parseFloat(document.getElementById('dpAmount').value) || 0;
+            const pel = parseFloat(document.getElementById('settlementAmount').value) || 0;
+            const remaining = sub - dp - pel;
+
+            const invData = {
+                id: document.getElementById('viewInvoiceNumber').innerText,
+                type: document.getElementById('docType').value,
+                status: document.getElementById('payStatus').value,
+                customer: document.getElementById('custName').value,
+                address: document.getElementById('custAddr').value,
+                date: document.getElementById('invoiceDate').value,
+                eventDate: document.getElementById('eventDate').value,
+                items: items,
+                subtotal: sub,
+                dp: dp,
+                pelunasan: pel,
+                remaining: remaining,
+                timestamp: new Date().getTime()
+            };
+
+            if(window.saveToCloud) {
+                await window.saveToCloud(invData);
+                alert("Data Berhasil Disimpan Ke Awan!");
+                showSection('viewAllInvoices');
+            }
+        }
+
+        function renderTable(tbodyId, typeFilter) {
+            const tbody = document.getElementById(tbodyId);
+            if (!tbody) return;
+            tbody.innerHTML = "";
+            let filtered = window.db || [];
+            
+            if(typeFilter === 'LUNAS_ONLY') filtered = filtered.filter(i => i.status === 'LUNAS');
+            else if(typeFilter !== 'ALL') filtered = filtered.filter(i => i.type === typeFilter);
+
+            filtered.sort((a,b) => b.timestamp - a.timestamp).forEach(item => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="px-6 py-4 font-mono font-bold text-gray-700">${item.id}</td>
+                    <td class="px-6 py-4"><span class="text-[10px] border border-gray-200 px-2 py-0.5 rounded text-gray-400 font-bold uppercase">${item.type.replace(' INVOICE', '')}</span></td>
+                    <td class="px-6 py-4 font-medium">${item.customer || '-'}</td>
+                    <td class="px-6 py-4 text-xs text-gray-500">${item.eventDate ? new Date(item.eventDate).toLocaleDateString('id-ID') : '-'}</td>
+                    <td class="px-6 py-4 text-right font-bold">Rp ${item.subtotal.toLocaleString('id-ID')}</td>
+                    <td class="px-6 py-4">
+                        <span onclick="changeStatusInline('${item.id}')" class="px-3 py-1 rounded-full text-[10px] font-bold cursor-pointer hover:opacity-80 transition ${item.status === 'LUNAS' ? 'bg-green-100 text-green-700' : (item.dp > 0 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700')}">
+                            ${item.status === 'LUNAS' ? 'LUNAS' : (item.dp > 0 ? 'DP' : 'UNPAID')}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 text-center">
+                        <button onclick="editInvoice('${item.id}')" class="text-yellow-600 hover:text-yellow-800 p-1"><i class="fas fa-edit"></i></button>
+                        <button onclick="deleteInvoice('${item.id}')" class="text-red-400 hover:text-red-600 p-1 ml-2"><i class="fas fa-trash"></i></button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        async function changeStatusInline(id) {
+            const index = window.db.findIndex(item => item.id === id);
+            if (index === -1) return;
+
+            const item = window.db[index];
+            let newStatus = "";
+            let newType = item.type;
+
+            // Logika Toggle
+            if (item.status === "PENDING" || (item.status !== "LUNAS" && item.dp > 0)) {
+                newStatus = "LUNAS";
+                newType = "INVOICE";
+            } else {
+                newStatus = "PENDING";
+                newType = "PROFORMA INVOICE";
+            }
+
+            const updatedItem = {...item, status: newStatus, type: newType};
+            if(window.saveToCloud) await window.saveToCloud(updatedItem);
+        }
+
+        function editInvoice(id) {
+            const data = window.db.find(i => i.id === id);
+            if(!data) return;
+            
+            showSection('viewEditor');
+            document.getElementById('viewInvoiceNumber').innerText = data.id;
+            document.getElementById('docType').value = data.type;
+            document.getElementById('payStatus').value = data.status;
+            document.getElementById('custName').value = data.customer;
+            document.getElementById('custAddr').value = data.address;
+            document.getElementById('invoiceDate').value = data.date;
+            document.getElementById('eventDate').value = data.eventDate || "";
+            document.getElementById('dpAmount').value = data.dp;
+            document.getElementById('settlementAmount').value = data.pelunasan;
+            
+            const tbody = document.getElementById('itemRows');
+            tbody.innerHTML = "";
+            data.items.forEach(it => {
+                const tr = document.createElement('tr');
+                tr.className = "border-b border-gray-100";
+                tr.innerHTML = `
+                    <td class="py-4">
+                        <select class="w-full font-bold outline-none bg-transparent mb-1 appearance-none cursor-pointer prod-select">
+                            <option value="${it.product}">${it.product || '-- Pilih Produk --'}</option>
+                            <option value="Tray Putih">Tray Putih</option>
+                            <option value="Tray Crystal">Tray Crystal</option>
+                            <option value="Hidden Tray (Kain)">Hidden Tray (Kain)</option>
+                            <option value="Hidden Box Ukir">Hidden Box Ukir</option>
+                            <option value="Kreasi Mahar">Kreasi Mahar</option>
+                            <option value="Custom / Lainnya">Custom / Lainnya</option>
+                        </select>
+                        <textarea class="w-full text-xs text-gray-500 outline-none italic bg-transparent resize-none overflow-hidden spec-req" rows="1" oninput='this.style.height = "";this.style.height = this.scrollHeight + "px"'>${it.request}</textarea>
+                    </td>
+                    <td class="py-4 text-center align-top"><input type="number" value="${it.qty}" class="w-full text-center outline-none qty" oninput="calculate()"></td>
+                    <td class="py-4 text-right align-top"><input type="number" value="${it.price}" class="w-full text-right outline-none price" oninput="calculate()"></td>
+                    <td class="py-4 text-right font-bold total-row align-top">Rp ${(it.qty * it.price).toLocaleString('id-ID')}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+            
+            updateView();
+            toggleLunas();
+            calculate();
+        }
+
+        async function deleteInvoice(id) {
+            if(!confirm("Hapus data ini dari penyimpanan awan?")) return;
+            if(window.deleteFromCloud) await window.deleteFromCloud(id);
+        }
+
+        function refreshDashboard() {
+            const data = window.db || [];
+            const pending = data.filter(i => i.status !== 'LUNAS' && i.dp === 0).length;
+            const dp = data.filter(i => i.status !== 'LUNAS' && i.dp > 0).length;
+            const lunas = data.filter(i => i.status === 'LUNAS').length;
+            
+            document.getElementById('statsPending').innerText = pending;
+            document.getElementById('statsDP').innerText = dp;
+            document.getElementById('statsLunas').innerText = lunas;
+
+            const recent = [...data].sort((a,b) => b.timestamp - a.timestamp).slice(0, 5);
+            const rTable = document.getElementById('homeRecentTable');
+            if(!rTable) return;
+            rTable.innerHTML = "";
+            recent.forEach(i => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="px-6 py-4 font-mono font-bold">${i.id}</td>
+                    <td class="px-6 py-4">${i.customer || '-'}</td>
+                    <td class="px-6 py-4 text-xs font-bold text-gray-400">${i.type.replace(' INVOICE', '')}</td>
+                    <td class="px-6 py-4 text-right font-bold">Rp ${i.subtotal.toLocaleString('id-ID')}</td>
+                    <td class="px-6 py-4">
+                        <span onclick="changeStatusInline('${i.id}')" class="text-[10px] font-bold cursor-pointer hover:underline ${i.status === 'LUNAS' ? 'text-green-600' : 'text-yellow-600'}">
+                            ${i.status}
+                        </span>
+                    </td>`;
+                rTable.appendChild(tr);
+            });
+        }
+
+        function renderCalendar() {
+            const grid = document.getElementById('calendarGrid');
+            const monthHeader = document.getElementById('calendarMonthYear');
+            if(!grid || !monthHeader) return;
+            
+            const headers = grid.querySelectorAll('div:nth-child(-n+7)');
+            grid.innerHTML = "";
+            headers.forEach(h => grid.appendChild(h));
+
+            const year = calCurrentDate.getFullYear();
+            const month = calCurrentDate.getMonth();
+            monthHeader.innerText = calCurrentDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+
+            const firstDay = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+            for(let i=0; i < firstDay; i++) {
+                grid.innerHTML += `<div class="bg-white min-h-[80px] md:min-h-[100px] p-2 border-b border-r border-gray-100"></div>`;
+            }
+
+            const data = window.db || [];
+            for(let d=1; d <= daysInMonth; d++) {
+                const dStr = `${year}-${(month+1).toString().padStart(2,'0')}-${d.toString().padStart(2,'0')}`;
+                const events = data.filter(i => i.status === 'LUNAS' && i.eventDate === dStr);
+                
+                let eventHtml = "";
+                events.forEach(ev => {
+                    eventHtml += `<div onclick="editInvoice('${ev.id}')" class="mt-1 bg-yellow-100 text-yellow-800 text-[10px] p-1 rounded border border-yellow-200 truncate cursor-pointer font-bold shadow-sm">💎 ${ev.customer}</div>`;
+                });
+
+                grid.innerHTML += `
+                    <div class="bg-white min-h-[80px] md:min-h-[100px] p-2 border-b border-r border-gray-100 transition hover:bg-gray-50">
+                        <span class="text-xs md:text-sm font-bold text-gray-400">${d}</span>
+                        ${eventHtml}
+                    </div>
+                `;
+            }
+        }
+
+        function prevMonth() { calCurrentDate.setMonth(calCurrentDate.getMonth() - 1); renderCalendar(); }
+        function nextMonth() { calCurrentDate.setMonth(calCurrentDate.getMonth() + 1); renderCalendar(); }
+
+        async function generateNewNumber() {
+            let last = parseInt(document.getElementById('lastNumber').value);
+            let next = last + 1;
+            let year = new Date().getFullYear();
+            let formatted = "INV-" + year + "-" + next.toString().padStart(3, '0');
+            document.getElementById('viewInvoiceNumber').innerText = formatted;
+            document.getElementById('lastNumber').value = next;
+            if(window.updateLastNumberCloud) await window.updateLastNumberCloud(next);
+        }
+
+        function updateView() {
+            const type = document.getElementById('docType').value;
+            document.getElementById('viewDocType').innerText = type;
+            document.getElementById('labelTotal').innerText = type === "INVOICE" ? "TOTAL AKHIR" : "SISA BAYAR";
+        }
+
+        function toggleLunas() {
+            const status = document.getElementById('payStatus').value;
+            const watermark = document.getElementById('watermarkLunas');
+            watermark.style.display = status === "LUNAS" ? "block" : "none";
+            
+            if(status === "LUNAS") {
+                document.getElementById('docType').value = "INVOICE";
+                updateView();
+            }
+        }
+
+        function addRow() {
+            const tbody = document.getElementById('itemRows');
+            const row = document.createElement('tr');
+            row.className = "border-b border-gray-100";
+            row.innerHTML = `
+                <td class="py-4">
+                    <select class="w-full font-bold outline-none bg-transparent mb-1 appearance-none cursor-pointer prod-select">
+                        <option value="">-- Pilih Produk --</option>
+                        <option value="Tray Putih">Tray Putih</option>
+                        <option value="Tray Crystal">Tray Crystal</option>
+                        <option value="Hidden Tray (Kain)">Hidden Tray (Kain)</option>
+                        <option value="Hidden Box Ukir">Hidden Box Ukir</option>
+                        <option value="Kreasi Mahar">Kreasi Mahar</option>
+                        <option value="Custom / Lainnya">Custom / Lainnya</option>
+                    </select>
+                    <textarea class="w-full text-xs text-gray-500 outline-none italic bg-transparent resize-none overflow-hidden spec-req" rows="1" placeholder="Spesial request..." oninput='this.style.height = "";this.style.height = this.scrollHeight + "px"'></textarea>
+                </td>
+                <td class="py-4 text-center align-top"><input type="number" value="1" class="w-full text-center outline-none qty" oninput="calculate()"></td>
+                <td class="py-4 text-right align-top"><input type="number" value="0" class="w-full text-right outline-none price" oninput="calculate()"></td>
+                <td class="py-4 text-right font-bold total-row align-top">Rp 0</td>
+            `;
+            tbody.appendChild(row);
+        }
+
+        function calculate() {
+            const rows = document.querySelectorAll('#itemRows tr');
+            let subtotal = 0;
+            rows.forEach(row => {
+                const qtyInput = row.querySelector('.qty');
+                const priceInput = row.querySelector('.price');
+                const qty = qtyInput ? (parseFloat(qtyInput.value) || 0) : 0;
+                const price = priceInput ? (parseFloat(priceInput.value) || 0) : 0;
+                const total = qty * price;
+                const totalDisplay = row.querySelector('.total-row');
+                if (totalDisplay) totalDisplay.innerText = "Rp " + total.toLocaleString('id-ID');
+                subtotal += total;
+            });
+            const dp = parseFloat(document.getElementById('dpAmount').value) || 0;
+            const pelunasan = parseFloat(document.getElementById('settlementAmount').value) || 0;
+            const grandTotal = subtotal - dp - pelunasan;
+            
+            // Logika transformasi otomatis
+            if(dp > 0 || pelunasan > 0) {
+                if(document.getElementById('docType').value === "PROFORMA INVOICE") {
+                    document.getElementById('docType').value = "INVOICE";
+                    updateView();
+                }
+            }
+
+            document.getElementById('subtotal').innerText = "Rp " + subtotal.toLocaleString('id-ID');
+            document.getElementById('grandTotal').innerText = "Rp " + grandTotal.toLocaleString('id-ID');
+        }
+
+    </script>
+</body>
+</html>
