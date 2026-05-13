@@ -7,91 +7,86 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- Firebase SDK -->
+    <!-- Firebase SDK (Aman untuk GitHub & Local) -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot, deleteDoc, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Variabel global yang disediakan oleh lingkungan
-        const firebaseConfig = JSON.parse(__firebase_config);
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const dbFirestore = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        // Mencegah error saat dihosting di GitHub
+        if (typeof __firebase_config !== 'undefined') {
+            try {
+                const firebaseConfig = JSON.parse(__firebase_config);
+                const app = initializeApp(firebaseConfig);
+                const auth = getAuth(app);
+                const dbFirestore = getFirestore(app);
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
-        // State Global
-        window.db = [];
-        window.currentUser = null;
+                window.currentUser = null;
 
-        // OTENTIKASI (ATURAN 3)
-        const initAuth = async () => {
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                await signInWithCustomToken(auth, __initial_auth_token);
-            } else {
-                await signInAnonymously(auth);
+                const initAuth = async () => {
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                };
+
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        window.currentUser = user;
+                        
+                        // Monitor Data Cloud
+                        const invoicesRef = collection(dbFirestore, 'artifacts', appId, 'public', 'data', 'invoices');
+                        onSnapshot(invoicesRef, (snapshot) => {
+                            if (snapshot.docs.length > 0) {
+                                window.db = snapshot.docs.map(doc => doc.data());
+                                localStorage.setItem('adrisya_db', JSON.stringify(window.db)); // Sinkronisasi Cloud ke HP
+                            }
+                            
+                            if (typeof refreshDashboard === 'function') refreshDashboard();
+                            const activeSection = document.querySelector('.section-content:not(.hidden)');
+                            if (activeSection) {
+                                const id = activeSection.id;
+                                if (id === 'viewAllInvoices') renderTable('tableAllInvoices', 'ALL');
+                                if (id === 'viewLunas') renderTable('tableLunas', 'LUNAS_ONLY');
+                                if (id === 'viewCalendar') renderCalendar();
+                            }
+                        });
+
+                        const settingsRef = doc(dbFirestore, 'artifacts', appId, 'public', 'data', 'settings', 'invoice_config');
+                        onSnapshot(settingsRef, (docSnap) => {
+                            if (docSnap.exists()) {
+                                document.getElementById('lastNumber').value = docSnap.data().lastInvNumber || 0;
+                            }
+                        });
+                    }
+                });
+
+                initAuth();
+
+                // Fungsi Cloud yang bisa diakses dari script utama
+                window.saveToCloud = async (invData) => {
+                    if (!window.currentUser) return;
+                    const docRef = doc(dbFirestore, 'artifacts', appId, 'public', 'data', 'invoices', invData.id);
+                    await setDoc(docRef, invData);
+                };
+
+                window.deleteFromCloud = async (id) => {
+                    if (!window.currentUser) return;
+                    const docRef = doc(dbFirestore, 'artifacts', appId, 'public', 'data', 'invoices', id);
+                    await deleteDoc(docRef);
+                };
+
+                window.updateLastNumberCloud = async (num) => {
+                    if (!window.currentUser) return;
+                    const docRef = doc(dbFirestore, 'artifacts', appId, 'public', 'data', 'settings', 'invoice_config');
+                    await setDoc(docRef, { lastInvNumber: num }, { merge: true });
+                };
+            } catch (e) {
+                console.log("Menjalankan Mode Offline / Local Storage");
             }
-        };
-
-        onAuthStateChanged(auth, (user) => {
-            if (user) {
-                window.currentUser = user;
-                // Jalankan Listener setelah Auth berhasil
-                initFirestoreListeners();
-            }
-        });
-
-        initAuth();
-
-        // FIRESTORE LISTENERS (ATURAN 1 & 2)
-        function initFirestoreListeners() {
-            // Monitor Invoices (Jalur Data Publik)
-            const invoicesRef = collection(dbFirestore, 'artifacts', appId, 'public', 'data', 'invoices');
-            onSnapshot(invoicesRef, (snapshot) => {
-                window.db = snapshot.docs.map(doc => doc.data());
-                
-                // Perbarui dashboard secara otomatis
-                if (typeof refreshDashboard === 'function') refreshDashboard();
-                
-                const activeSection = document.querySelector('.section-content:not(.hidden)');
-                if (activeSection) {
-                    const id = activeSection.id;
-                    if (id === 'viewAllInvoices') renderTable('tableAllInvoices', 'ALL');
-                    if (id === 'viewLunas') renderTable('tableLunas', 'LUNAS_ONLY');
-                    if (id === 'viewCalendar') renderCalendar();
-                    if (id === 'viewHome') refreshDashboard();
-                }
-            }, (error) => console.error("Firestore Error:", error));
-
-            // Monitor Settings (Nomor Urut Terakhir)
-            const settingsRef = doc(dbFirestore, 'artifacts', appId, 'public', 'data', 'settings', 'invoice_config');
-            onSnapshot(settingsRef, (docSnap) => {
-                if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    document.getElementById('lastNumber').value = data.lastInvNumber || 0;
-                }
-            });
         }
-
-        // AKSI CLOUD
-        window.saveToCloud = async (invData) => {
-            if (!window.currentUser) return;
-            const docRef = doc(dbFirestore, 'artifacts', appId, 'public', 'data', 'invoices', invData.id);
-            await setDoc(docRef, invData);
-        };
-
-        window.deleteFromCloud = async (id) => {
-            if (!window.currentUser) return;
-            const docRef = doc(dbFirestore, 'artifacts', appId, 'public', 'data', 'invoices', id);
-            await deleteDoc(docRef);
-        };
-
-        window.updateLastNumberCloud = async (num) => {
-            if (!window.currentUser) return;
-            const docRef = doc(dbFirestore, 'artifacts', appId, 'public', 'data', 'settings', 'invoice_config');
-            await setDoc(docRef, { lastInvNumber: num }, { merge: true });
-        };
-
     </script>
 
     <style>
@@ -354,7 +349,7 @@
                     </div>
                     <div class="flex gap-2 w-full md:w-auto">
                         <button onclick="saveCurrentInvoice()" class="flex-grow md:flex-grow-0 bg-green-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-green-700 transition flex items-center gap-2 justify-center">
-                            <i class="fas fa-cloud-upload-alt"></i> Simpan Ke Awan
+                            <i class="fas fa-save"></i> Simpan
                         </button>
                         <button onclick="window.print()" class="flex-grow md:flex-grow-0 bg-gray-800 text-white px-6 py-3 rounded-lg font-bold hover:bg-black transition flex items-center gap-2 justify-center">
                             <i class="fas fa-print"></i> Cetak / PDF
@@ -479,6 +474,9 @@
     </div>
 
     <script>
+        // INISIALISASI DATABASE LOCAL HP TERLEBIH DAHULU
+        window.db = JSON.parse(localStorage.getItem('adrisya_db')) || [];
+
         // Kredensial Login
         const validUser = "admin";
         const validPass = "adrisya123";
@@ -591,11 +589,20 @@
                 timestamp: new Date().getTime()
             };
 
+            // SIMPAN KE MEMORI HP (LOCAL STORAGE) TERLEBIH DAHULU
+            const index = window.db.findIndex(item => item.id === invData.id);
+            if(index > -1) window.db[index] = invData;
+            else window.db.push(invData);
+            localStorage.setItem('adrisya_db', JSON.stringify(window.db));
+
+            // SIMPAN KE CLOUD (JIKA TERSEDIA)
             if(window.saveToCloud) {
-                await window.saveToCloud(invData);
-                alert("Data Berhasil Disimpan Ke Awan!");
-                showSection('viewAllInvoices');
+                try { await window.saveToCloud(invData); } catch(e) {}
             }
+            
+            alert("Data Berhasil Disimpan!");
+            showSection('viewAllInvoices');
+            refreshDashboard();
         }
 
         function renderTable(tbodyId, typeFilter) {
@@ -637,7 +644,6 @@
             let newStatus = "";
             let newType = item.type;
 
-            // Logika Toggle
             if (item.status === "PENDING" || (item.status !== "LUNAS" && item.dp > 0)) {
                 newStatus = "LUNAS";
                 newType = "INVOICE";
@@ -647,7 +653,24 @@
             }
 
             const updatedItem = {...item, status: newStatus, type: newType};
-            if(window.saveToCloud) await window.saveToCloud(updatedItem);
+            
+            // SIMPAN PERUBAHAN KE MEMORI HP
+            window.db[index] = updatedItem;
+            localStorage.setItem('adrisya_db', JSON.stringify(window.db));
+
+            // SIMPAN PERUBAHAN KE CLOUD
+            if(window.saveToCloud) {
+                try { await window.saveToCloud(updatedItem); } catch(e) {}
+            }
+            
+            refreshDashboard();
+            const activeSection = document.querySelector('.section-content:not(.hidden)');
+            if (activeSection) {
+                const sectionId = activeSection.id;
+                if (sectionId === 'viewAllInvoices') renderTable('tableAllInvoices', 'ALL');
+                if (sectionId === 'viewLunas') renderTable('tableLunas', 'LUNAS_ONLY');
+                if (sectionId === 'viewCalendar') renderCalendar();
+            }
         }
 
         function editInvoice(id) {
@@ -696,8 +719,25 @@
         }
 
         async function deleteInvoice(id) {
-            if(!confirm("Hapus data ini dari penyimpanan awan?")) return;
-            if(window.deleteFromCloud) await window.deleteFromCloud(id);
+            if(!confirm("Hapus data invoice ini?")) return;
+            
+            // HAPUS DARI MEMORI HP
+            window.db = window.db.filter(i => i.id !== id);
+            localStorage.setItem('adrisya_db', JSON.stringify(window.db));
+
+            // HAPUS DARI CLOUD
+            if(window.deleteFromCloud) {
+                try { await window.deleteFromCloud(id); } catch(e) {}
+            }
+            
+            refreshDashboard();
+            const activeSection = document.querySelector('.section-content:not(.hidden)');
+            if (activeSection) {
+                const sectionId = activeSection.id;
+                if (sectionId === 'viewAllInvoices') renderTable('tableAllInvoices', 'ALL');
+                if (sectionId === 'viewLunas') renderTable('tableLunas', 'LUNAS_ONLY');
+                if (sectionId === 'viewCalendar') renderCalendar();
+            }
         }
 
         function refreshDashboard() {
@@ -779,7 +819,14 @@
             let formatted = "INV-" + year + "-" + next.toString().padStart(3, '0');
             document.getElementById('viewInvoiceNumber').innerText = formatted;
             document.getElementById('lastNumber').value = next;
-            if(window.updateLastNumberCloud) await window.updateLastNumberCloud(next);
+            
+            // Simpan nomor urut ke memori HP
+            localStorage.setItem('lastInvNumber', next);
+            
+            // Simpan ke Cloud
+            if(window.updateLastNumberCloud) {
+                try { await window.updateLastNumberCloud(next); } catch(e) {}
+            }
         }
 
         function updateView() {
@@ -840,7 +887,6 @@
             const pelunasan = parseFloat(document.getElementById('settlementAmount').value) || 0;
             const grandTotal = subtotal - dp - pelunasan;
             
-            // Logika transformasi otomatis
             if(dp > 0 || pelunasan > 0) {
                 if(document.getElementById('docType').value === "PROFORMA INVOICE") {
                     document.getElementById('docType').value = "INVOICE";
@@ -852,6 +898,9 @@
             document.getElementById('grandTotal').innerText = "Rp " + grandTotal.toLocaleString('id-ID');
         }
 
+        if(localStorage.getItem('lastInvNumber')) {
+            document.getElementById('lastNumber').value = localStorage.getItem('lastInvNumber');
+        }
     </script>
 </body>
 </html>
