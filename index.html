@@ -462,6 +462,15 @@
                                     <input type="number" id="dpAmount" value="0" class="w-24 text-right font-bold outline-none bg-gray-50 rounded px-1" oninput="calculate()">
                                 </div>
                             </div>
+                            <!-- FITUR BARU: KOLOM DISKON -->
+                            <div class="flex justify-between items-center text-gray-600">
+                                <span>Diskon</span>
+                                <div class="flex items-center gap-1">
+                                    <span class="text-gray-400">- Rp</span>
+                                    <input type="number" id="discountAmount" value="0" class="w-24 text-right font-bold outline-none bg-gray-50 rounded px-1" oninput="calculate()">
+                                </div>
+                            </div>
+                            <!-- ======================== -->
                             <div class="flex justify-between items-center text-gray-600">
                                 <span>Pelunasan</span>
                                 <div class="flex items-center gap-1">
@@ -552,6 +561,7 @@
             document.getElementById('custName').value = "";
             document.getElementById('custAddr').value = "";
             document.getElementById('dpAmount').value = 0;
+            document.getElementById('discountAmount').value = 0; // Reset Diskon
             document.getElementById('settlementAmount').value = 0;
             document.getElementById('invoiceDate').valueAsDate = new Date();
             document.getElementById('eventDate').value = "";
@@ -594,8 +604,9 @@
 
             const sub = parseFloat(document.getElementById('subtotal').innerText.replace(/[^0-9]/g, ''));
             const dp = parseFloat(document.getElementById('dpAmount').value) || 0;
+            const discount = parseFloat(document.getElementById('discountAmount').value) || 0; // Baca data diskon
             const pel = parseFloat(document.getElementById('settlementAmount').value) || 0;
-            const remaining = sub - dp - pel;
+            const remaining = sub - discount - dp - pel; // Kurangi total dengan diskon
 
             const invData = {
                 id: document.getElementById('viewInvoiceNumber').innerText,
@@ -607,6 +618,7 @@
                 eventDate: document.getElementById('eventDate').value,
                 items: items,
                 subtotal: sub,
+                discount: discount, // Simpan data diskon
                 dp: dp,
                 pelunasan: pel,
                 remaining: remaining,
@@ -709,8 +721,9 @@
             document.getElementById('custAddr').value = data.address;
             document.getElementById('invoiceDate').value = data.date;
             document.getElementById('eventDate').value = data.eventDate || "";
-            document.getElementById('dpAmount').value = data.dp;
-            document.getElementById('settlementAmount').value = data.pelunasan;
+            document.getElementById('dpAmount').value = data.dp || 0;
+            document.getElementById('discountAmount').value = data.discount || 0; // Load data diskon
+            document.getElementById('settlementAmount').value = data.pelunasan || 0;
             
             const tbody = document.getElementById('itemRows');
             tbody.innerHTML = "";
@@ -908,8 +921,9 @@
                 subtotal += total;
             });
             const dp = parseFloat(document.getElementById('dpAmount').value) || 0;
+            const discount = parseFloat(document.getElementById('discountAmount').value) || 0; // Baca data diskon
             const pelunasan = parseFloat(document.getElementById('settlementAmount').value) || 0;
-            const grandTotal = subtotal - dp - pelunasan;
+            const grandTotal = subtotal - discount - dp - pelunasan; // Perhitungan memasukkan diskon
             
             if(dp > 0 || pelunasan > 0) {
                 if(document.getElementById('docType').value === "PROFORMA INVOICE") {
