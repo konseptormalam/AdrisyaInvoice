@@ -237,10 +237,68 @@
         }
         function openEditor() { showSection('viewEditor'); }
         function addRow() {
-            const tbody = document.getElementById('itemRows');
-            const row = document.createElement('tr');
-            row.innerHTML = `<td class="py-2"><select class="w-full prod-select outline-none"><option value="">-- Produk --</option><option value="Tray Putih">Tray Putih</option><option value="Tray Crystal">Tray Crystal</option><option value="Hidden Tray">Hidden Tray</option><option value="Hidden Box">Hidden Box</option><option value="Mahar">Mahar</option><option value="Custom">Custom</option></select></td><td class="text-center"><input type="number" value="1" class="w-12 text-center outline-none qty" oninput="calculate()"></td><td class="text-right"><input type="number" value="0" class="w-20 text-right outline-none price" oninput="calculate()"></td><td class="text-right font-bold total-row">Rp 0</td>`;
-            tbody.appendChild(row);
+    const tbody = document.getElementById('itemRows');
+    const row = document.createElement('tr');
+
+    row.innerHTML = `
+        <td class="py-2">
+            <select class="w-full prod-select outline-none" onchange="handleCustomProduct(this)">
+                <option value="">-- Produk --</option>
+                <option value="Tray Putih">Tray Putih</option>
+                <option value="Tray Crystal">Tray Crystal</option>
+                <option value="Hidden Tray">Hidden Tray</option>
+                <option value="Hidden Box">Hidden Box</option>
+                <option value="Mahar">Mahar</option>
+                <option value="Standing Rotary">Standing Rotary</option>
+                <option value="Ongkos Kirim">Ongkos Kirim</option>
+                <option value="Custom">Custom</option>
+            </select>
+
+            <input 
+                type="text" 
+                class="w-full mt-1 custom-product hidden outline-none border-b border-gray-300"
+                placeholder="Ketik nama produk..."
+            >
+        </td>
+
+        <td class="text-center">
+            <input 
+                type="number" 
+                value="1" 
+                class="w-12 text-center outline-none qty" 
+                oninput="calculate()"
+            >
+        </td>
+
+        <td class="text-right">
+            <input 
+                type="number" 
+                value="0" 
+                class="w-20 text-right outline-none price" 
+                oninput="calculate()"
+            >
+        </td>
+
+        <td class="text-right font-bold total-row">
+            Rp 0
+        </td>
+    `;
+
+    tbody.appendChild(row);
+}
+
+function handleCustomProduct(select) {
+    const row = select.closest('tr');
+    const customInput = row.querySelector('.custom-product');
+
+    if (select.value === 'Custom') {
+        customInput.classList.remove('hidden');
+        customInput.focus();
+    } else {
+        customInput.classList.add('hidden');
+        customInput.value = '';
+    }
+}
         }
         function calculate() {
             let subtotal = 0;
