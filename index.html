@@ -1,298 +1,1195 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Invoice Management System - Adrisya</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+import React, { useState, useEffect } from 'react';
+
+// --- INJECT CUSTOM STYLES & FONTS ---
+const injectStyles = () => {
+  const style = document.createElement('style');
+  style.innerHTML = `
+    @import url('https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,300;0,400;0,700;1,400&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap');
     
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot, deleteDoc, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    :root {
+      --primary-gold: #C5A059;
+      --dark-gold: #B08D4A;
+      --champagne-gold: #D8C08A;
+      --ivory: #FEFDF0;
+      --warm-white: #FFFFFF;
+      --soft-beige: #F6F1E7;
+      --dark-text: #333333;
+      --muted-text: #777777;
+    }
 
-        const myFirebaseConfig = {
-            apiKey: "API_KEY_ANDA",
-            authDomain: "AUTH_DOMAIN_ANDA",
-            projectId: "PROJECT_ID_ANDA",
-            storageBucket: "STORAGE_BUCKET_ANDA",
-            messagingSenderId: "MESSAGING_SENDER_ID_ANDA",
-            appId: "APP_ID_ANDA"
-        };
+    body {
+      font-family: 'Lato', sans-serif;
+      background-color: var(--warm-white);
+      color: var(--dark-text);
+      -webkit-font-smoothing: antialiased;
+    }
 
-        let activeFirebaseConfig = null;
-        let appId = "adrisya-invoice-app";
+    h1, h2, h3, h4, h5, h6, .font-playfair {
+      font-family: 'Playfair Display', serif;
+    }
 
-        if (typeof __firebase_config !== 'undefined') {
-            activeFirebaseConfig = JSON.parse(__firebase_config);
-            appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        } else if (myFirebaseConfig.apiKey !== "API_KEY_ANDA") {
-            activeFirebaseConfig = myFirebaseConfig;
-        }
+    @media print {
+      body * {
+        visibility: hidden;
+      }
+      #printable-invoice, #printable-invoice * {
+        visibility: visible;
+      }
+      #printable-invoice {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        background-color: white !important;
+        padding: 0 !important;
+      }
+      .no-print {
+        display: none !important;
+      }
+      @page { margin: 0.5cm; }
+    }
+    
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--soft-beige); }
+    ::-webkit-scrollbar-thumb { background: var(--champagne-gold); border-radius: 10px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--primary-gold); }
+  `;
+  document.head.appendChild(style);
+};
 
-        if (activeFirebaseConfig) {
-            try {
-                const app = initializeApp(activeFirebaseConfig);
-                const auth = getAuth(app);
-                const dbFirestore = getFirestore(app);
+// --- CUSTOM SVG ICONS AS FUNCTIONS RETURNING JSX ---
+const IconHome = (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>;
+const IconFileText = (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>;
+const IconUsers = (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>;
+const IconPackage = (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"></line><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>;
+const IconBarChart = (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="20" x2="12" y2="10"></line><line x1="18" y1="20" x2="18" y2="4"></line><line x1="6" y1="20" x2="6" y2="16"></line></svg>;
+const IconSettings = (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>;
+const IconLogOut = (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>;
+const IconPlus = (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
+const IconMenu = (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>;
+const IconX = (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>;
+const IconTrash = (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>;
+const IconEdit = (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>;
+const IconPrinter = (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>;
+const IconShare = (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>;
+const IconSearch = (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>;
+const IconCheck = (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"></polyline></svg>;
+const IconEye = (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>;
+const IconChevronLeft = (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"></polyline></svg>;
+const IconPieChart = (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path><path d="M22 12A10 10 0 0 0 12 2v10z"></path></svg>;
 
-                window.currentUser = null;
+// --- UTILITIES ---
+const formatIDR = (number) => {
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  }).format(number || 0);
+};
 
-                const initAuth = async () => {
-                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        await signInWithCustomToken(auth, __initial_auth_token);
-                    } else {
-                        await signInAnonymously(auth);
-                    }
-                };
+const formatDate = (dateStr) => {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  return new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }).format(date);
+};
 
-                onAuthStateChanged(auth, (user) => {
-                    if (user) {
-                        window.currentUser = user;
-                        const invoicesRef = collection(dbFirestore, 'artifacts', appId, 'public', 'data', 'invoices');
-                        onSnapshot(invoicesRef, (snapshot) => {
-                            if (snapshot.docs.length > 0) {
-                                window.db = snapshot.docs.map(doc => doc.data());
-                                localStorage.setItem('adrisya_db', JSON.stringify(window.db));
-                            }
-                            if (typeof refreshDashboard === 'function') refreshDashboard();
-                        });
+const generateId = () => Math.random().toString(36).substr(2, 9);
 
-                        const settingsRef = doc(dbFirestore, 'artifacts', appId, 'public', 'data', 'settings', 'invoice_config');
-                        onSnapshot(settingsRef, (docSnap) => {
-                            if (docSnap.exists()) {
-                                document.getElementById('lastNumber').value = docSnap.data().lastInvNumber || 0;
-                            }
-                        });
-                    }
-                });
+function useLocalStorage(key, initialValue) {
+  const [storedValue, setStoredValue] = useState(() => {
+    try {
+      const item = window.localStorage.getItem(key);
+      return item ? JSON.parse(item) : initialValue;
+    } catch (error) {
+      console.warn(error);
+      return initialValue;
+    }
+  });
 
-                initAuth();
+  const setValue = (value) => {
+    try {
+      const valueToStore = value instanceof Function ? value(storedValue) : value;
+      setStoredValue(valueToStore);
+      window.localStorage.setItem(key, JSON.stringify(valueToStore));
+    } catch (error) {
+      console.warn(error);
+    }
+  };
+  return [storedValue, setValue];
+}
 
-                window.saveToCloud = async (invData) => {
-                    if (!window.currentUser) return;
-                    const docRef = doc(dbFirestore, 'artifacts', appId, 'public', 'data', 'invoices', invData.id);
-                    await setDoc(docRef, invData);
-                };
+// --- INITIAL DATA SEED ---
+const defaultProducts = [
+  { id: 'p1', name: 'Tray Putih', defaultPrice: 150000, active: true },
+  { id: 'p2', name: 'Tray Crystal', defaultPrice: 200000, active: true },
+  { id: 'p3', name: 'Hidden Tray', defaultPrice: 180000, active: true },
+  { id: 'p4', name: 'Hidden Box Ukir', defaultPrice: 250000, active: true },
+  { id: 'p5', name: 'Mahar', defaultPrice: 500000, active: true },
+  { id: 'p6', name: 'Standing Rotary', defaultPrice: 100000, active: true },
+  { id: 'p7', name: 'Tray Full Acrylic', defaultPrice: 220000, active: true },
+  { id: 'p8', name: 'Ongkos Kirim', defaultPrice: 50000, active: true },
+];
 
-                window.deleteFromCloud = async (id) => {
-                    if (!window.currentUser) return;
-                    const docRef = doc(dbFirestore, 'artifacts', appId, 'public', 'data', 'invoices', id);
-                    await deleteDoc(docRef);
-                };
+const defaultSettings = {
+  businessName: 'Adrisya Decoration',
+  category: 'Mahar & Seserahan',
+  location: 'Banyuwangi',
+  phone1: '0896-6963-6206',
+  phone2: '0895-0600-8479',
+  instagram: '@adrisyadecoration',
+  tiktok: '@adrisya.decoration',
+  bank: 'SeaBank',
+  accountNumber: '901400783663',
+  accountName: 'Adellia Sartika Putri',
+  invoicePrefix: 'INV',
+  lastInvoiceNumber: 0,
+  adminUsername: 'admin',
+  adminPassword: 'adrisya123'
+};
 
-                window.updateLastNumberCloud = async (num) => {
-                    if (!window.currentUser) return;
-                    const docRef = doc(dbFirestore, 'artifacts', appId, 'public', 'data', 'settings', 'invoice_config');
-                    await setDoc(docRef, { lastInvNumber: num }, { merge: true });
-                };
-            } catch (e) {
-                console.log("Mode Offline");
-            }
-        }
-    </script>
+// --- REUSABLE UI COMPONENTS ---
+const Card = ({ children, className = '' }) => (
+  <div className={`bg-white rounded-xl shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] border border-[#F6F1E7] overflow-hidden ${className}`}>
+    {children}
+  </div>
+);
 
-    <style>
-        .watermark {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%) rotate(-30deg);
-            font-size: 8rem;
-            font-weight: 900;
-            color: rgba(220, 38, 38, 0.15);
-            border: 12px solid rgba(220, 38, 38, 0.15);
-            padding: 10px 40px;
-            border-radius: 20px;
-            pointer-events: none;
-            display: none;
-            z-index: 0;
-        }
+const Button = ({ children, onClick, variant = 'primary', icon, className = '', type = 'button', disabled = false }) => {
+  const baseStyle = "flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed";
+  const variants = {
+    primary: "bg-[#C5A059] text-white hover:bg-[#B08D4A] shadow-md hover:shadow-lg",
+    secondary: "bg-[#F6F1E7] text-[#B08D4A] hover:bg-[#D8C08A] hover:text-white",
+    outline: "border border-[#C5A059] text-[#C5A059] hover:bg-[#F6F1E7]",
+    danger: "bg-red-50 text-red-500 hover:bg-red-500 hover:text-white",
+    ghost: "text-[#777777] hover:text-[#C5A059] hover:bg-[#F6F1E7]"
+  };
+  
+  const iconMap = {
+    Home: IconHome, FileText: IconFileText, Users: IconUsers, Package: IconPackage,
+    BarChart: IconBarChart, Settings: IconSettings, LogOut: IconLogOut, Plus: IconPlus,
+    Menu: IconMenu, X: IconX, Trash: IconTrash, Edit: IconEdit, Printer: IconPrinter,
+    Share: IconShare, Search: IconSearch, Check: IconCheck, Eye: IconEye,
+    ChevronLeft: IconChevronLeft, PieChart: IconPieChart
+  };
+  const IconComponent = icon && iconMap[icon] ? iconMap[icon] : null;
 
-        .nav-active { background-color: #c5a059; color: white !important; }
+  return (
+    <button type={type} onClick={onClick} disabled={disabled} className={`${baseStyle} ${variants[variant]} ${className}`}>
+      {IconComponent && <IconComponent className="w-4 h-4" />}
+      {children}
+    </button>
+  );
+};
 
-        @media print {
-            .no-print { display: none !important; }
-            @page { size: A4; margin: 5mm; }
-            body { background: white !important; padding: 0 !important; margin: 0 !important; }
-            .print-area { 
-                box-shadow: none !important; 
-                width: 100% !important;
-                max-width: 100% !important;
-                padding: 10px !important;
-                margin: 0 !important;
-                font-size: 12px !important;
-            }
-            .mt-12 { margin-top: 1rem !important; }
-            .mt-20 { margin-top: 1.5rem !important; }
-            .py-4 { padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; }
-        }
-    </style>
-</head>
-<body class="bg-gray-50 font-sans">
-    <div id="loginOverlay" class="fixed inset-0 z-[100] bg-gray-100 flex items-center justify-center no-print">
-        <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md">
-            <h2 class="text-2xl font-bold text-center text-gray-800 mb-6">Adrisya Decoration</h2>
-            <div class="space-y-4">
-                <input type="text" id="userInput" class="w-full p-3 border rounded-lg" placeholder="Username">
-                <input type="password" id="passInput" class="w-full p-3 border rounded-lg" placeholder="Password">
-                <button onclick="checkLogin()" class="w-full bg-yellow-600 text-white py-3 rounded-lg font-bold">MASUK</button>
-            </div>
+const Input = ({ label, type = 'text', value, onChange, placeholder, required = false, className = '', min, prefix, readOnly = false }) => (
+  <div className={`flex flex-col gap-1.5 ${className}`}>
+    {label && <label className="text-sm font-semibold text-[#333333]">{label} {required && <span className="text-red-500">*</span>}</label>}
+    <div className="relative">
+      {prefix && <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#777777]">{prefix}</div>}
+      <input
+        type={type}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        required={required}
+        min={min}
+        readOnly={readOnly}
+        className={`w-full bg-white border border-[#D8C08A] rounded-lg px-3 py-2.5 outline-none transition-all focus:border-[#C5A059] focus:ring-1 focus:ring-[#C5A059] ${prefix ? 'pl-10' : ''} ${readOnly ? 'bg-gray-50 text-gray-600' : ''}`}
+      />
+    </div>
+  </div>
+);
+
+const Badge = ({ status }) => {
+  const styles = {
+    'LUNAS': 'bg-green-100 text-green-700 border-green-200',
+    'DP': 'bg-yellow-100 text-yellow-700 border-yellow-200',
+    'BELUM BAYAR': 'bg-red-100 text-red-700 border-red-200'
+  };
+  return (
+    <span className={`px-2.5 py-1 text-xs font-bold rounded-full border ${styles[status] || 'bg-gray-100'}`}>
+      {status}
+    </span>
+  );
+};
+
+// --- VIEWS ---
+
+const ViewLogin = ({ onLogin, settings }) => {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+
+  const handleLogin = (e) => {
+    e.preventDefault();
+    const adminUser = settings.adminUsername || 'admin';
+    const adminPass = settings.adminPassword || 'adrisya123';
+    if (username === adminUser && password === adminPass) {
+      onLogin();
+    } else {
+      setError('Username atau password salah.');
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-[#F6F1E7] p-4 relative overflow-hidden">
+      <div className="absolute top-[-10%] left-[-10%] w-[40vw] h-[40vw] rounded-full bg-[#D8C08A] opacity-20 blur-3xl"></div>
+      <div className="absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] rounded-full bg-[#C5A059] opacity-10 blur-3xl"></div>
+      
+      <Card className="w-full max-w-md p-8 relative z-10">
+        <div className="text-center mb-8">
+          <h1 className="font-playfair text-3xl font-bold text-[#C5A059] mb-2 tracking-wide">ADRISYA DECORATION</h1>
+          <p className="text-[#777777] text-sm mt-2">Invoice Management System</p>
         </div>
+        
+        {error && <div className="bg-red-50 text-red-500 p-3 rounded-md text-sm text-center mb-4">{error}</div>}
+        
+        <form onSubmit={handleLogin} className="space-y-5">
+          <Input label="Username" value={username} onChange={e => setUsername(e.target.value)} placeholder="Masukkan username" required />
+          <Input label="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Masukkan password" required />
+          <Button type="submit" variant="primary" className="w-full mt-6 py-3 text-lg">MASUK</Button>
+        </form>
+      </Card>
     </div>
+  );
+};
 
-    <div id="mainApp" class="hidden min-h-screen flex flex-col md:flex-row">
-        <aside class="w-full md:w-64 bg-white border-r border-gray-200 no-print">
-            <div class="p-6">
-                <nav class="space-y-2">
-                    <button onclick="showSection('viewHome')" class="w-full text-left px-4 py-3 rounded-xl hover:bg-gray-50">Beranda</button>
-                    <button onclick="showSection('viewAllInvoices')" class="w-full text-left px-4 py-3 rounded-xl hover:bg-gray-50">Daftar Invoice</button>
-                    <button onclick="openEditor()" class="w-full bg-yellow-600 text-white px-4 py-3 rounded-xl font-bold">Buat Baru</button>
-                </nav>
-            </div>
-        </aside>
+const ViewDashboard = ({ invoices, navigate }) => {
+  const totalInvoices = invoices.length;
+  const belumLunas = invoices.filter(i => i.status !== 'LUNAS').length;
+  const lunas = invoices.filter(i => i.status === 'LUNAS').length;
+  const totalPendapatan = invoices.reduce((sum, i) => sum + (Number(i.dp) + Number(i.settlement)), 0);
 
-        <main class="flex-grow p-6 overflow-y-auto">
-            <section id="viewHome" class="section-content">
-                <h1 class="text-3xl font-bold mb-8">Ringkasan</h1>
-            </section>
+  const recentInvoices = [...invoices].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 5);
 
-            <section id="viewAllInvoices" class="hidden section-content">
-                <table class="w-full text-left">
-                    <tbody id="tableAllInvoices"></tbody>
-                </table>
-            </section>
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <div>
+        <h1 className="font-playfair text-3xl font-bold text-[#333333]">Selamat datang di Adrisya Decoration</h1>
+        <p className="text-[#777777] mt-1">Kelola invoice dan transaksi dengan mudah dan elegan.</p>
+      </div>
 
-            <section id="viewEditor" class="hidden section-content pb-20">
-                <div class="no-print bg-white p-6 rounded-2xl shadow-sm border mb-6 flex gap-4">
-                    <button onclick="saveCurrentInvoice()" class="bg-green-600 text-white px-6 py-3 rounded-lg font-bold">Simpan</button>
-                    <button onclick="window.print()" class="bg-gray-800 text-white px-6 py-3 rounded-lg font-bold">Cetak / PDF</button>
-                </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: 'Total Invoice', value: totalInvoices, icon: 'FileText', color: 'text-blue-600', bg: 'bg-blue-50' },
+          { label: 'Belum Lunas', value: belumLunas, icon: 'Users', color: 'text-red-500', bg: 'bg-red-50' },
+          { label: 'Lunas', value: lunas, icon: 'Check', color: 'text-green-600', bg: 'bg-green-50' },
+          { label: 'Total Pendapatan', value: formatIDR(totalPendapatan), icon: 'BarChart', color: 'text-[#C5A059]', bg: 'bg-[#FEFDF0]' },
+        ].map((stat, i) => {
+          const iconMap = { FileText: IconFileText, Users: IconUsers, Check: IconCheck, BarChart: IconBarChart };
+          const StatIcon = iconMap[stat.icon];
+          return (
+            <Card key={i} className="p-5 flex items-center gap-4 border-l-4 border-l-[#C5A059]">
+              <div className={`p-3 rounded-full ${stat.bg}`}>
+                {StatIcon && <StatIcon className={`w-6 h-6 ${stat.color}`} />}
+              </div>
+              <div>
+                <p className="text-sm text-[#777777]">{stat.label}</p>
+                <h3 className="text-xl font-bold text-[#333333]">{stat.value}</h3>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
 
-                <div class="max-w-4xl mx-auto bg-white p-8 shadow-lg border print-area relative" id="invoice">
-                    <div id="watermarkLunas" class="watermark">LUNAS</div>
-                    <div class="flex justify-between border-b pb-4">
-                        <div>
-                            <h1 class="text-2xl font-bold uppercase" id="viewDocType">PROFORMA INVOICE</h1>
-                            <p class="font-mono" id="viewInvoiceNumber">INV-2026-000</p>
-                        </div>
-                        <div class="text-right">
-                            <h2 class="font-bold text-yellow-600">Adrisya Decoration</h2>
-                            <p class="text-xs">Banyuwangi | WA: 0896-6963-6206</p>
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-4 mt-6 text-sm">
-                        <div>
-                            <input type="text" id="custName" class="w-full font-bold outline-none" placeholder="Nama Pelanggan">
-                            <textarea id="custAddr" class="w-full outline-none text-gray-600" rows="2" placeholder="Alamat"></textarea>
-                        </div>
-                        <div class="text-right">
-                            <input type="date" id="invoiceDate" class="block w-full text-right outline-none">
-                            <input type="date" id="eventDate" class="block w-full text-right text-yellow-600 outline-none">
-                        </div>
-                    </div>
-
-                    <table class="w-full mt-6 text-left border-collapse text-sm">
-                        <thead><tr class="border-b"><th>Deskripsi</th><th class="text-center">Qty</th><th class="text-right">Harga</th><th class="text-right">Total</th></tr></thead>
-                        <tbody id="itemRows"></tbody>
-                    </table>
-                    <button onclick="addRow()" class="no-print mt-2 text-yellow-600 font-bold text-xs">+ Tambah Baris</button>
-
-                    <div class="mt-6 flex justify-end">
-                        <div class="w-64 space-y-1 text-sm">
-                            <div class="flex justify-between"><span>Subtotal</span><span id="subtotal" class="font-bold">Rp 0</span></div>
-                            <div class="flex justify-between"><span>DP</span><input type="number" id="dpAmount" value="0" class="w-20 text-right font-bold outline-none" oninput="calculate()"></div>
-                            <div class="flex justify-between"><span>Diskon</span><input type="number" id="discountAmount" value="0" class="w-20 text-right font-bold outline-none" oninput="calculate()"></div>
-                            <div class="flex justify-between"><span>Pelunasan</span><input type="number" id="settlementAmount" value="0" class="w-20 text-right font-bold outline-none" oninput="calculate()"></div>
-                            <div class="flex justify-between border-t pt-1 font-bold"><span>SISA BAYAR</span><span id="grandTotal">Rp 0</span></div>
-                        </div>
-                    </div>
-
-                    <div class="mt-8 flex justify-between items-end text-[10px]">
-                        <div class="p-2 bg-gray-50 border rounded">
-                            <p class="font-bold">SeaBank: 901400783663 (Adellia Sartika Putri)</p>
-                        </div>
-                        <p>Hormat Kami, Adrisya Decoration</p>
-                    </div>
-                </div>
-            </section>
-        </main>
+      <Card className="p-0">
+        <div className="p-5 border-b border-[#F6F1E7] flex justify-between items-center bg-[#FEFDF0]">
+          <h2 className="font-playfair text-xl font-bold text-[#333333]">Invoice Terbaru</h2>
+          <Button variant="ghost" className="text-sm" onClick={() => navigate('invoices')}>Lihat Semua</Button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-[#F6F1E7] text-[#777777] text-sm">
+                <th className="p-4 font-semibold">No. Invoice</th>
+                <th className="p-4 font-semibold">Customer</th>
+                <th className="p-4 font-semibold">Tanggal</th>
+                <th className="p-4 font-semibold">Total</th>
+                <th className="p-4 font-semibold">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recentInvoices.length === 0 ? (
+                <tr><td colSpan="5" className="p-8 text-center text-[#777777]">Belum ada invoice.</td></tr>
+              ) : recentInvoices.map(inv => (
+                <tr key={inv.id} className="border-b border-[#F6F1E7] hover:bg-[#FEFDF0] transition-colors">
+                  <td className="p-4 font-medium text-[#C5A059]">{inv.invoiceNumber}</td>
+                  <td className="p-4">{inv.customerName}</td>
+                  <td className="p-4">{formatDate(inv.invoiceDate)}</td>
+                  <td className="p-4 font-semibold">{formatIDR(inv.subtotal - inv.discount)}</td>
+                  <td className="p-4"><Badge status={inv.status} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
     </div>
+  );
+};
 
-    <script>
-        window.db = JSON.parse(localStorage.getItem('adrisya_db')) || [];
-        function checkLogin() {
-            const user = document.getElementById('userInput').value;
-            const pass = document.getElementById('passInput').value;
-            if (user === "admin" && pass === "adrisya123") {
-                document.getElementById('loginOverlay').style.display = "none";
-                document.getElementById('mainApp').classList.remove('hidden');
-            }
-        }
-        function showSection(id) {
-            document.querySelectorAll('.section-content').forEach(s => s.classList.add('hidden'));
-            document.getElementById(id).classList.remove('hidden');
-        }
-        function openEditor() { showSection('viewEditor'); }
-        function addRow() {
-            const tbody = document.getElementById('itemRows');
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td class="py-2">
-                    <select class="w-full prod-select outline-none" onchange="handleCustomProduct(this)">
-                        <option value="">-- Produk --</option>
-                        <option value="Tray Putih">Tray Putih</option>
-                        <option value="Tray Crystal">Tray Crystal</option>
-                        <option value="Hidden Tray">Hidden Tray</option>
-                        <option value="Hidden Box">Hidden Box</option>
-                        <option value="Mahar">Mahar</option>
-                        <option value="Standing Rotary">Standing Rotary</option>
-                        <option value="Ongkos Kirim">Ongkos Kirim</option>
-                        <option value="Custom">Custom</option>
-                    </select>
-                    <input type="text" class="w-full mt-1 custom-product hidden outline-none border-b border-gray-300" placeholder="Ketik nama produk...">
-                </td>
-                <td class="text-center">
-                    <input type="number" value="1" class="w-12 text-center outline-none qty" oninput="calculate()">
-                </td>
-                <td class="text-right">
-                    <input type="number" value="0" class="w-20 text-right outline-none price" oninput="calculate()">
-                </td>
-                <td class="text-right font-bold total-row">
-                    Rp 0
-                </td>
-            `;
-            tbody.appendChild(row);
-        }
-        function handleCustomProduct(select) {
-            const row = select.closest('tr');
-            const customInput = row.querySelector('.custom-product');
-            if (select.value === 'Custom') {
-                customInput.classList.remove('hidden');
-                customInput.focus();
+const ViewInvoiceForm = ({ navigate, onSave, customers, products, settings, initialData = null }) => {
+  const isEdit = !!initialData;
+  const [formData, setFormData] = useState(initialData || {
+    id: generateId(),
+    invoiceNumber: '',
+    invoiceDate: new Date().toISOString().split('T')[0],
+    eventDate: '',
+    customerId: '',
+    customerName: '',
+    customerPhone: '',
+    customerAddress: '',
+    items: [],
+    subtotal: 0,
+    discount: 0,
+    dp: 0,
+    settlement: 0,
+    remaining: 0,
+    status: 'BELUM BAYAR',
+    notes: 'Terima kasih telah mempercayakan momen spesial Anda kepada Adrisya Decoration.',
+    createdAt: new Date().toISOString(),
+  });
+
+  useEffect(() => {
+    if (!isEdit && !formData.invoiceNumber) {
+      const year = new Date().getFullYear();
+      const nextNum = (settings.lastInvoiceNumber || 0) + 1;
+      const formattedNum = String(nextNum).padStart(3, '0');
+      setFormData(prev => ({ ...prev, invoiceNumber: `${settings.invoicePrefix}-${year}-${formattedNum}` }));
+    }
+  }, [isEdit, settings, formData.invoiceNumber]);
+
+  useEffect(() => {
+    const subtotal = formData.items.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+    const totalAfterDiscount = subtotal - Number(formData.discount);
+    const paid = Number(formData.dp) + Number(formData.settlement);
+    let remaining = totalAfterDiscount - paid;
+    if (remaining < 0) remaining = 0;
+
+    let status = 'BELUM BAYAR';
+    if (remaining <= 0 && totalAfterDiscount > 0) status = 'LUNAS';
+    else if (paid > 0) status = 'DP';
+
+    setFormData(prev => ({ ...prev, subtotal, remaining, status }));
+  }, [formData.items, formData.discount, formData.dp, formData.settlement]);
+
+  const handleCustomerSelect = (e) => {
+    const id = e.target.value;
+    if (id) {
+      const c = customers.find(c => c.id === id);
+      setFormData(prev => ({
+        ...prev,
+        customerId: id,
+        customerName: c.name,
+        customerPhone: c.phone,
+        customerAddress: c.address
+      }));
+    } else {
+      setFormData(prev => ({ ...prev, customerId: '', customerName: '', customerPhone: '', customerAddress: '' }));
+    }
+  };
+
+  const addItem = (isCustom = false) => {
+    setFormData(prev => ({
+      ...prev,
+      items: [...prev.items, {
+        id: generateId(),
+        productId: '',
+        productName: isCustom ? 'Custom Product' : '',
+        qty: 1,
+        price: 0,
+        total: 0,
+        isCustom
+      }]
+    }));
+  };
+
+  const updateItem = (id, field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      items: prev.items.map(item => {
+        if (item.id === id) {
+          const updatedItem = { ...item, [field]: value };
+          if (field === 'productId' && value) {
+            if (value === 'CUSTOM') {
+              updatedItem.isCustom = true;
+              updatedItem.productName = '';
+              updatedItem.price = 0;
             } else {
-                customInput.classList.add('hidden');
-                customInput.value = '';
+              const prod = products.find(p => p.id === value);
+              if (prod) {
+                updatedItem.isCustom = false;
+                updatedItem.productName = prod.name;
+                updatedItem.price = prod.defaultPrice;
+              }
             }
+          }
+          if (['qty', 'price', 'productId', 'productName', 'isCustom'].includes(field)) {
+            updatedItem.total = Number(updatedItem.qty) * Number(updatedItem.price);
+          }
+          return updatedItem;
         }
-        function calculate() {
-            let subtotal = 0;
-            document.querySelectorAll('#itemRows tr').forEach(row => {
-                const q = parseFloat(row.querySelector('.qty').value) || 0;
-                const p = parseFloat(row.querySelector('.price').value) || 0;
-                const total = q * p;
-                row.querySelector('.total-row').innerText = "Rp " + total.toLocaleString('id-ID');
-                subtotal += total;
-            });
-            const dp = parseFloat(document.getElementById('dpAmount').value) || 0;
-            const disc = parseFloat(document.getElementById('discountAmount').value) || 0;
-            const pel = parseFloat(document.getElementById('settlementAmount').value) || 0;
-            const grand = subtotal - disc - dp - pel;
-            document.getElementById('subtotal').innerText = "Rp " + subtotal.toLocaleString('id-ID');
-            document.getElementById('grandTotal').innerText = "Rp " + grand.toLocaleString('id-ID');
-        }
-    </script>
-</body>
-</html>
+        return item;
+      })
+    }));
+  };
+
+  const removeItem = (id) => {
+    setFormData(prev => ({ ...prev, items: prev.items.filter(i => i.id !== id) }));
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (formData.items.length === 0) {
+      alert("Mohon tambahkan minimal 1 item produk.");
+      return;
+    }
+    onSave(formData, !isEdit);
+    navigate('invoice-view', formData.id);
+  };
+
+  return (
+    <div className="space-y-6 pb-20">
+      <div className="flex items-center gap-4">
+        <Button variant="ghost" icon="ChevronLeft" onClick={() => navigate('invoices')}>Kembali</Button>
+        <h1 className="font-playfair text-2xl font-bold">{isEdit ? 'Edit Invoice' : 'Buat Invoice Baru'}</h1>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Card className="p-6 lg:col-span-1 space-y-4">
+            <h3 className="font-bold text-[#C5A059] border-b border-[#F6F1E7] pb-2 mb-4">Informasi Invoice</h3>
+            <Input label="Nomor Invoice" value={formData.invoiceNumber} readOnly={true} />
+            <Input label="Tanggal Invoice" type="date" value={formData.invoiceDate} onChange={e => setFormData({...formData, invoiceDate: e.target.value})} required />
+            <Input label="Tanggal Acara" type="date" value={formData.eventDate} onChange={e => setFormData({...formData, eventDate: e.target.value})} required />
+            
+            <div className="mt-4 p-4 bg-[#FEFDF0] rounded-lg border border-[#D8C08A] text-center">
+              <p className="text-sm text-[#777777] mb-1">Status Pembayaran</p>
+              <div className="text-lg"><Badge status={formData.status} /></div>
+            </div>
+          </Card>
+
+          <Card className="p-6 lg:col-span-2 space-y-4">
+             <div className="flex justify-between items-center border-b border-[#F6F1E7] pb-2 mb-4">
+                <h3 className="font-bold text-[#C5A059]">Data Pelanggan</h3>
+                <Button variant="outline" className="text-xs py-1.5 px-3" onClick={() => navigate('customers')}>+ Pelanggan Baru</Button>
+             </div>
+            
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-semibold text-[#333333]">Pilih Pelanggan dari Database</label>
+              <select 
+                className="w-full bg-white border border-[#D8C08A] rounded-lg px-3 py-2.5 outline-none focus:border-[#C5A059]"
+                value={formData.customerId}
+                onChange={handleCustomerSelect}
+              >
+                <option value="">-- Pilih atau Isi Manual --</option>
+                {customers.map(c => <option key={c.id} value={c.id}>{c.name} - {c.phone}</option>)}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Input label="Nama Pelanggan" value={formData.customerName} onChange={e => setFormData({...formData, customerName: e.target.value})} required />
+              <Input label="Nomor WhatsApp" value={formData.customerPhone} onChange={e => setFormData({...formData, customerPhone: e.target.value})} required />
+            </div>
+            <Input label="Alamat / Lokasi Acara" value={formData.customerAddress} onChange={e => setFormData({...formData, customerAddress: e.target.value})} />
+          </Card>
+        </div>
+
+        <Card className="p-6">
+          <h3 className="font-bold text-[#C5A059] border-b border-[#F6F1E7] pb-2 mb-4">Item Produk</h3>
+          
+          <div className="space-y-4">
+            {formData.items.map((item) => (
+              <div key={item.id} className="flex flex-col md:flex-row gap-4 items-start md:items-end bg-[#FEFDF0] p-4 rounded-lg border border-[#F6F1E7]">
+                <div className="w-full md:w-1/3">
+                  <label className="text-xs font-semibold text-[#777777] mb-1 block">Produk</label>
+                  <select 
+                    className="w-full bg-white border border-[#D8C08A] rounded-lg px-3 py-2.5 outline-none focus:border-[#C5A059]"
+                    value={item.isCustom ? 'CUSTOM' : item.productId}
+                    onChange={e => updateItem(item.id, 'productId', e.target.value)}
+                    required
+                  >
+                    <option value="">-- Pilih Produk --</option>
+                    {products.filter(p => p.active).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    <option value="CUSTOM">Custom Produk</option>
+                  </select>
+                  {item.isCustom && (
+                    <div className="mt-2">
+                      <Input placeholder="Nama produk custom..." value={item.productName} onChange={e => updateItem(item.id, 'productName', e.target.value)} required />
+                    </div>
+                  )}
+                </div>
+                <div className="w-full md:w-24">
+                  <Input label="Qty" type="number" min="1" value={item.qty} onChange={e => updateItem(item.id, 'qty', e.target.value)} required />
+                </div>
+                <div className="w-full md:w-1/4">
+                  <Input label="Harga (Rp)" type="number" min="0" value={item.price} onChange={e => updateItem(item.id, 'price', e.target.value)} required />
+                </div>
+                <div className="w-full md:w-1/4">
+                  <Input label="Total" value={formatIDR(item.total)} readOnly={true} />
+                </div>
+                <button type="button" onClick={() => removeItem(item.id)} className="p-2.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors mt-6">
+                  <IconTrash className="w-5 h-5" />
+                </button>
+              </div>
+            ))}
+
+            <div className="flex gap-4 pt-2">
+              <Button variant="outline" icon="Plus" onClick={() => addItem(false)}>Tambah Produk</Button>
+            </div>
+          </div>
+        </Card>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card className="p-6">
+             <h3 className="font-bold text-[#C5A059] border-b border-[#F6F1E7] pb-2 mb-4">Catatan Invoice</h3>
+             <textarea 
+                className="w-full h-32 bg-white border border-[#D8C08A] rounded-lg px-3 py-2.5 outline-none focus:border-[#C5A059] resize-none"
+                value={formData.notes}
+                onChange={e => setFormData({...formData, notes: e.target.value})}
+             ></textarea>
+          </Card>
+
+          <Card className="p-6 bg-[#FEFDF0]">
+            <h3 className="font-bold text-[#C5A059] border-b border-[#D8C08A] pb-2 mb-4">Ringkasan Pembayaran</h3>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-[#777777]">Subtotal</span>
+                <span className="font-semibold">{formatIDR(formData.subtotal)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-[#777777]">Diskon (Rp)</span>
+                <input type="number" className="w-32 text-right border border-[#D8C08A] rounded p-1 outline-none" value={formData.discount} onChange={e => setFormData({...formData, discount: e.target.value})} />
+              </div>
+              <div className="flex justify-between items-center pt-2 border-t border-[#F6F1E7]">
+                <span className="font-bold text-[#333333]">Total Akhir</span>
+                <span className="font-bold text-lg text-[#C5A059]">{formatIDR(formData.subtotal - formData.discount)}</span>
+              </div>
+              <div className="flex justify-between items-center mt-4">
+                <span className="text-[#777777]">DP (Rp)</span>
+                <input type="number" className="w-32 text-right border border-[#D8C08A] rounded p-1 outline-none" value={formData.dp} onChange={e => setFormData({...formData, dp: e.target.value})} />
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-[#777777]">Pelunasan (Rp)</span>
+                <input type="number" className="w-32 text-right border border-[#D8C08A] rounded p-1 outline-none" value={formData.settlement} onChange={e => setFormData({...formData, settlement: e.target.value})} />
+              </div>
+              <div className="flex justify-between items-center pt-3 border-t border-dashed border-[#D8C08A] mt-2">
+                <span className="font-bold text-lg text-[#333333]">Sisa Bayar</span>
+                <span className={`font-bold text-xl ${formData.remaining <= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                  {formatIDR(formData.remaining)}
+                </span>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        <div className="flex justify-end gap-4 mt-8 bg-white p-4 rounded-xl shadow-sm border border-[#F6F1E7] sticky bottom-4 z-10">
+          <Button variant="ghost" onClick={() => navigate('invoices')}>Batal</Button>
+          <Button type="submit" variant="primary" icon="Check">Simpan Invoice</Button>
+        </div>
+      </form>
+    </div>
+  );
+};
+
+const ViewInvoiceDetail = ({ invoiceId, invoices, settings, navigate }) => {
+  const invoice = invoices.find(i => i.id === invoiceId);
+  
+  if (!invoice) return <div>Invoice tidak ditemukan.</div>;
+
+  const handlePrint = () => window.print();
+
+  const handleWhatsApp = () => {
+    const total = invoice.subtotal - invoice.discount;
+    const paid = Number(invoice.dp) + Number(invoice.settlement);
+    const text = `Halo Kak ${invoice.customerName},\n\nBerikut invoice dari *${settings.businessName}*.\n\nNo. Invoice: ${invoice.invoiceNumber}\nTotal: ${formatIDR(total)}\nDP: ${formatIDR(invoice.dp)}\nSisa pembayaran: ${formatIDR(invoice.remaining)}\nTanggal acara: ${formatDate(invoice.eventDate)}\n\nTerima kasih telah mempercayakan seserahan Anda kepada Adrisya Decoration.\n\n_“Menghias Seserahan dengan Hati, untuk Momen yang Berarti”_`;
+    
+    let phone = invoice.customerPhone.replace(/\D/g, '');
+    if (phone.startsWith('0')) phone = '62' + phone.substring(1);
+    
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank');
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap justify-between items-center gap-4 no-print">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" icon="ChevronLeft" onClick={() => navigate('invoices')}>Kembali</Button>
+          <h1 className="font-playfair text-2xl font-bold">Detail Invoice</h1>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" icon="Edit" onClick={() => navigate('invoice-form', invoiceId)}>Edit</Button>
+          <Button variant="secondary" icon="Printer" onClick={handlePrint}>Cetak</Button>
+          <Button variant="primary" icon="Share" onClick={handleWhatsApp}>Kirim WhatsApp</Button>
+        </div>
+      </div>
+
+      <div id="printable-invoice" className="bg-white p-8 md:p-12 rounded-xl shadow-lg border border-[#F6F1E7] max-w-4xl mx-auto relative overflow-hidden text-[#333333]">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-[#F6F1E7] rounded-bl-full opacity-50 z-0 no-print"></div>
+        
+        {invoice.status === 'LUNAS' && (
+          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-8xl font-bold text-[#C5A059] opacity-10 rotate-[-30deg] pointer-events-none border-8 border-[#C5A059] p-8 rounded-xl font-playfair tracking-widest z-0">
+            LUNAS
+          </div>
+        )}
+
+        <div className="relative z-10">
+          <div className="flex justify-between items-start border-b-2 border-[#D8C08A] pb-6 mb-8">
+            <div>
+              <h1 className="font-playfair text-4xl font-bold text-[#C5A059] tracking-wider uppercase">{settings.businessName}</h1>
+              <p className="text-md text-[#777777] mt-1 font-playfair italic">{settings.category} | {settings.location}</p>
+              <div className="text-sm mt-3 text-[#555]">
+                <p>WA: {settings.phone1} {settings.phone2 ? `| ${settings.phone2}` : ''}</p>
+                <p>IG: {settings.instagram} | TikTok: {settings.tiktok}</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <h2 className="font-playfair text-3xl font-bold text-[#333333] mb-2 tracking-widest">INVOICE</h2>
+              <p className="text-sm"><strong>No:</strong> <span className="text-[#C5A059]">{invoice.invoiceNumber}</span></p>
+              <p className="text-sm"><strong>Tanggal:</strong> {formatDate(invoice.invoiceDate)}</p>
+              <div className="mt-4 bg-[#FEFDF0] p-2 rounded border border-[#F6F1E7] inline-block">
+                <p className="text-sm text-[#777777] mb-1">Status</p>
+                <Badge status={invoice.status} />
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-8 mb-8">
+            <div>
+              <h3 className="font-bold text-[#B08D4A] border-b border-[#F6F1E7] pb-1 mb-3">BILL TO</h3>
+              <p className="font-bold text-lg">{invoice.customerName}</p>
+              <p className="text-sm mt-1">{invoice.customerPhone}</p>
+              <p className="text-sm mt-1 max-w-xs">{invoice.customerAddress}</p>
+            </div>
+            <div className="text-right">
+              <h3 className="font-bold text-[#B08D4A] border-b border-[#F6F1E7] pb-1 mb-3">EVENT DETAIL</h3>
+              <p className="text-sm"><strong>Tanggal Acara:</strong></p>
+              <p className="font-bold text-lg text-[#333333]">{formatDate(invoice.eventDate)}</p>
+            </div>
+          </div>
+
+          <table className="w-full mb-8 border-collapse">
+            <thead>
+              <tr className="bg-[#F6F1E7] text-[#333333]">
+                <th className="py-3 px-4 text-left font-semibold">Deskripsi Produk</th>
+                <th className="py-3 px-4 text-center font-semibold w-24">Qty</th>
+                <th className="py-3 px-4 text-right font-semibold w-40">Harga (Rp)</th>
+                <th className="py-3 px-4 text-right font-semibold w-48">Total (Rp)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {invoice.items.map((item, idx) => (
+                <tr key={idx} className="border-b border-[#F6F1E7]">
+                  <td className="py-4 px-4">{item.productName}</td>
+                  <td className="py-4 px-4 text-center">{item.qty}</td>
+                  <td className="py-4 px-4 text-right">{formatIDR(item.price).replace('Rp', '')}</td>
+                  <td className="py-4 px-4 text-right font-medium">{formatIDR(item.total).replace('Rp', '')}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <div className="flex flex-col md:flex-row justify-between gap-8">
+            <div className="w-full md:w-1/2">
+              <h3 className="font-bold text-[#B08D4A] mb-2">Informasi Pembayaran</h3>
+              <div className="bg-[#FEFDF0] p-4 rounded-lg border border-[#F6F1E7] text-sm">
+                <p>Transfer Bank <strong>{settings.bank}</strong></p>
+                <p className="font-bold text-lg tracking-wider text-[#333333] my-1">{settings.accountNumber}</p>
+                <p>a/n <strong>{settings.accountName}</strong></p>
+              </div>
+              {invoice.notes && (
+                <div className="mt-4 text-sm text-[#777777] italic">
+                  <p><strong>Catatan:</strong></p>
+                  <p>{invoice.notes}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="w-full md:w-1/2 lg:w-1/3">
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span>Subtotal</span>
+                  <span>{formatIDR(invoice.subtotal)}</span>
+                </div>
+                {Number(invoice.discount) > 0 && (
+                  <div className="flex justify-between text-red-500">
+                    <span>Diskon</span>
+                    <span>- {formatIDR(invoice.discount)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-bold pt-2 border-t border-[#F6F1E7] text-base">
+                  <span>Total Akhir</span>
+                  <span>{formatIDR(invoice.subtotal - invoice.discount)}</span>
+                </div>
+                <div className="flex justify-between text-[#777777] pt-2">
+                  <span>DP Dibayar</span>
+                  <span>{formatIDR(invoice.dp)}</span>
+                </div>
+                {Number(invoice.settlement) > 0 && (
+                  <div className="flex justify-between text-[#777777]">
+                    <span>Pelunasan</span>
+                    <span>{formatIDR(invoice.settlement)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-bold pt-3 mt-3 border-t-2 border-[#C5A059] text-xl">
+                  <span>SISA BAYAR</span>
+                  <span className={invoice.remaining <= 0 ? 'text-green-600' : 'text-[#C5A059]'}>
+                    {formatIDR(invoice.remaining)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-16 pt-8 border-t border-[#F6F1E7] text-center">
+            <p className="font-playfair text-xl text-[#333333] mb-2">Hormat Kami,</p>
+            <h4 className="font-playfair font-bold text-[#C5A059] text-2xl mt-8 mb-4">{settings.businessName}</h4>
+            <p className="text-[#777777] italic font-playfair">“Menghias Seserahan dengan Hati, untuk Momen yang Berarti”</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ViewInvoiceList = ({ invoices, navigate, onDelete }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState('ALL');
+
+  const filtered = invoices.filter(inv => {
+    const matchSearch = inv.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                        inv.customerName.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchStatus = filterStatus === 'ALL' || inv.status === filterStatus;
+    return matchSearch && matchStatus;
+  }).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <h1 className="font-playfair text-2xl font-bold">Daftar Invoice</h1>
+        <Button variant="primary" icon="Plus" onClick={() => navigate('invoice-form')}>Buat Invoice</Button>
+      </div>
+
+      <Card className="p-4 flex flex-col sm:flex-row gap-4">
+        <div className="flex-1">
+          <Input placeholder="Cari nama customer atau no invoice..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} prefix={<IconSearch className="w-4 h-4" />} />
+        </div>
+        <select 
+          className="bg-white border border-[#D8C08A] rounded-lg px-3 py-2.5 outline-none focus:border-[#C5A059] w-full sm:w-48"
+          value={filterStatus}
+          onChange={e => setFilterStatus(e.target.value)}
+        >
+          <option value="ALL">Semua Status</option>
+          <option value="BELUM BAYAR">Belum Bayar</option>
+          <option value="DP">DP</option>
+          <option value="LUNAS">Lunas</option>
+        </select>
+      </Card>
+
+      <Card className="overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-[#F6F1E7] text-[#777777] text-sm">
+                <th className="p-4 font-semibold">No. Invoice</th>
+                <th className="p-4 font-semibold">Customer</th>
+                <th className="p-4 font-semibold">Tgl Acara</th>
+                <th className="p-4 font-semibold text-right">Total</th>
+                <th className="p-4 font-semibold">Status</th>
+                <th className="p-4 font-semibold text-center">Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 ? (
+                <tr><td colSpan="6" className="p-8 text-center text-[#777777]">Tidak ada data ditemukan.</td></tr>
+              ) : filtered.map(inv => (
+                <tr key={inv.id} className="border-b border-[#F6F1E7] hover:bg-[#FEFDF0]">
+                  <td className="p-4 font-medium text-[#C5A059]">{inv.invoiceNumber}</td>
+                  <td className="p-4 font-medium">{inv.customerName}</td>
+                  <td className="p-4 text-sm">{formatDate(inv.eventDate)}</td>
+                  <td className="p-4 text-right font-semibold">{formatIDR(inv.subtotal - inv.discount)}</td>
+                  <td className="p-4"><Badge status={inv.status} /></td>
+                  <td className="p-4">
+                    <div className="flex justify-center gap-2">
+                      <button onClick={() => navigate('invoice-view', inv.id)} className="p-2 text-[#C5A059] hover:bg-[#F6F1E7] rounded" title="Lihat"><IconEye className="w-4 h-4" /></button>
+                      <button onClick={() => navigate('invoice-form', inv.id)} className="p-2 text-blue-500 hover:bg-blue-50 rounded" title="Edit"><IconEdit className="w-4 h-4" /></button>
+                      <button onClick={() => { if(window.confirm('Hapus invoice ini?')) onDelete(inv.id); }} className="p-2 text-red-500 hover:bg-red-50 rounded" title="Hapus"><IconTrash className="w-4 h-4" /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  );
+};
+
+const ViewCustomers = ({ customers, onSave, onDelete, invoices }) => {
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [form, setForm] = useState({ name: '', phone: '', address: '' });
+
+  const handleEdit = (c) => { setForm(c); setEditingId(c.id); setIsFormOpen(true); };
+  const handleNew = () => { setForm({ name: '', phone: '', address: '' }); setEditingId(null); setIsFormOpen(true); };
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSave({ ...form, id: editingId || generateId() }, !editingId);
+    setIsFormOpen(false);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h1 className="font-playfair text-2xl font-bold">Data Pelanggan</h1>
+        <Button variant="primary" icon="Plus" onClick={handleNew}>Pelanggan Baru</Button>
+      </div>
+
+      {isFormOpen && (
+        <Card className="p-6 border-l-4 border-l-[#C5A059] bg-[#FEFDF0]">
+          <h3 className="font-bold mb-4">{editingId ? 'Edit Pelanggan' : 'Tambah Pelanggan'}</h3>
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+            <Input label="Nama" value={form.name} onChange={e => setForm({...form, name: e.target.value})} required />
+            <Input label="WhatsApp" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} required />
+            <Input label="Alamat" value={form.address} onChange={e => setForm({...form, address: e.target.value})} />
+            <div className="md:col-span-3 flex justify-end gap-2 mt-2">
+              <Button variant="ghost" onClick={() => setIsFormOpen(false)}>Batal</Button>
+              <Button type="submit" variant="primary">Simpan</Button>
+            </div>
+          </form>
+        </Card>
+      )}
+
+      <Card>
+        <table className="w-full text-left">
+          <thead className="bg-[#F6F1E7]"><tr className="text-sm">
+            <th className="p-4">Nama</th><th className="p-4">WhatsApp</th><th className="p-4">Alamat</th><th className="p-4 text-center">Total Transaksi</th><th className="p-4 text-center">Aksi</th>
+          </tr></thead>
+          <tbody>
+            {customers.map(c => {
+              const custInvoices = invoices.filter(i => i.customerId === c.id || i.customerName.toLowerCase() === c.name.toLowerCase());
+              const totalSpent = custInvoices.reduce((sum, i) => sum + (i.subtotal - i.discount), 0);
+              return (
+                <tr key={c.id} className="border-b">
+                  <td className="p-4 font-medium">{c.name}</td>
+                  <td className="p-4">{c.phone}</td>
+                  <td className="p-4 text-sm">{c.address}</td>
+                  <td className="p-4 text-center font-semibold">{formatIDR(totalSpent)}</td>
+                  <td className="p-4 flex justify-center gap-2">
+                    <button onClick={() => handleEdit(c)} className="p-2 text-blue-500 hover:bg-blue-50 rounded"><IconEdit className="w-4 h-4" /></button>
+                    <button onClick={() => { if(window.confirm('Hapus?')) onDelete(c.id); }} className="p-2 text-red-500 hover:bg-red-50 rounded"><IconTrash className="w-4 h-4" /></button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </Card>
+    </div>
+  );
+};
+
+const ViewProducts = ({ products, onSave }) => {
+  const [editingId, setEditingId] = useState(null);
+  const [form, setForm] = useState({ name: '', defaultPrice: 0, active: true });
+
+  const handleEdit = (p) => { setForm(p); setEditingId(p.id); };
+  const handleSave = () => { onSave({ ...form, id: editingId }); setEditingId(null); };
+
+  return (
+    <div className="space-y-6">
+      <h1 className="font-playfair text-2xl font-bold">Katalog Produk</h1>
+      <Card>
+        <table className="w-full text-left">
+          <thead className="bg-[#F6F1E7]"><tr className="text-sm">
+            <th className="p-4">Nama Produk</th><th className="p-4">Harga Default (Rp)</th><th className="p-4 text-center">Status</th><th className="p-4 text-center">Aksi</th>
+          </tr></thead>
+          <tbody>
+            {products.map(p => (
+              <tr key={p.id} className="border-b">
+                <td className="p-4 font-medium">{p.name}</td>
+                <td className="p-4">
+                  {editingId === p.id ? 
+                    <input type="number" className="border p-1 rounded" value={form.defaultPrice} onChange={e=>setForm({...form, defaultPrice: e.target.value})} /> 
+                    : formatIDR(p.defaultPrice)}
+                </td>
+                <td className="p-4 text-center">
+                  <span className={`px-2 py-1 rounded text-xs ${p.active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>{p.active ? 'Aktif' : 'Nonaktif'}</span>
+                </td>
+                <td className="p-4 flex justify-center gap-2">
+                  {editingId === p.id ? (
+                     <Button variant="primary" className="py-1 px-2 text-xs" onClick={handleSave}>Simpan</Button>
+                  ) : (
+                    <button onClick={() => handleEdit(p)} className="p-2 text-[#C5A059] hover:bg-[#F6F1E7] rounded" title="Edit Harga"><IconEdit className="w-4 h-4" /></button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
+    </div>
+  );
+};
+
+const ViewSettings = ({ settings, onSave }) => {
+  const [form, setForm] = useState(settings);
+  const handleSubmit = (e) => { e.preventDefault(); onSave(form); alert('Pengaturan disimpan!'); };
+
+  return (
+    <div className="space-y-6 max-w-4xl">
+      <h1 className="font-playfair text-2xl font-bold">Pengaturan Bisnis & Keamanan</h1>
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <Card className="p-6 space-y-4">
+          <h3 className="font-bold text-[#C5A059] border-b pb-2">Informasi Utama</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input label="Nama Bisnis" value={form.businessName} onChange={e=>setForm({...form, businessName: e.target.value})} />
+            <Input label="Kategori / Slogan Singkat" value={form.category} onChange={e=>setForm({...form, category: e.target.value})} />
+            <Input label="Lokasi" value={form.location} onChange={e=>setForm({...form, location: e.target.value})} />
+            <Input label="Prefix Invoice" value={form.invoicePrefix} onChange={e=>setForm({...form, invoicePrefix: e.target.value})} />
+          </div>
+        </Card>
+        <Card className="p-6 space-y-4">
+          <h3 className="font-bold text-[#C5A059] border-b pb-2">Keamanan Login</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input label="Username Admin" value={form.adminUsername || 'admin'} onChange={e=>setForm({...form, adminUsername: e.target.value})} />
+            <Input label="Password Admin" type="text" value={form.adminPassword || 'adrisya123'} onChange={e=>setForm({...form, adminPassword: e.target.value})} />
+          </div>
+        </Card>
+        <Card className="p-6 space-y-4">
+          <h3 className="font-bold text-[#C5A059] border-b pb-2">Kontak & Sosmed</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input label="WhatsApp 1" value={form.phone1} onChange={e=>setForm({...form, phone1: e.target.value})} />
+            <Input label="WhatsApp 2 (Opsional)" value={form.phone2} onChange={e=>setForm({...form, phone2: e.target.value})} />
+            <Input label="Instagram" value={form.instagram} onChange={e=>setForm({...form, instagram: e.target.value})} />
+            <Input label="TikTok" value={form.tiktok} onChange={e=>setForm({...form, tiktok: e.target.value})} />
+          </div>
+        </Card>
+        <Card className="p-6 space-y-4">
+          <h3 className="font-bold text-[#C5A059] border-b pb-2">Rekening Bank</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Input label="Nama Bank" value={form.bank} onChange={e=>setForm({...form, bank: e.target.value})} />
+            <Input label="Nomor Rekening" value={form.accountNumber} onChange={e=>setForm({...form, accountNumber: e.target.value})} />
+            <Input label="Atas Nama" value={form.accountName} onChange={e=>setForm({...form, accountName: e.target.value})} />
+          </div>
+        </Card>
+        <Button type="submit" variant="primary">Simpan Pengaturan</Button>
+      </form>
+    </div>
+  );
+};
+
+const ViewReports = ({ invoices }) => {
+  const [filterType, setFilterType] = useState('ALL');
+
+  const getFilteredInvoices = () => {
+    if (filterType === 'ALL') return invoices;
+    const now = new Date();
+    return invoices.filter(inv => {
+      const invDate = new Date(inv.invoiceDate);
+      if (filterType === 'TODAY') {
+        return invDate.toDateString() === now.toDateString();
+      }
+      if (filterType === 'THIS_WEEK') {
+        const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay()));
+        return invDate >= startOfWeek;
+      }
+      if (filterType === 'THIS_MONTH') {
+        return invDate.getMonth() === now.getMonth() && invDate.getFullYear() === now.getFullYear();
+      }
+      return true;
+    });
+  };
+
+  const filteredInvoices = getFilteredInvoices();
+  const totalPenjualan = filteredInvoices.reduce((sum, i) => sum + (i.subtotal - i.discount), 0);
+  const totalDP = filteredInvoices.reduce((sum, i) => sum + Number(i.dp), 0);
+  const totalPelunasan = filteredInvoices.reduce((sum, i) => sum + Number(i.settlement), 0);
+  const totalBelumDibayar = filteredInvoices.reduce((sum, i) => sum + Number(i.remaining), 0);
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <h1 className="font-playfair text-2xl font-bold">Laporan Penjualan</h1>
+        <select 
+          className="bg-white border border-[#D8C08A] rounded-lg px-4 py-2.5 outline-none focus:border-[#C5A059]"
+          value={filterType}
+          onChange={e => setFilterType(e.target.value)}
+        >
+          <option value="ALL">Semua Waktu</option>
+          <option value="TODAY">Hari Ini</option>
+          <option value="THIS_WEEK">Minggu Ini</option>
+          <option value="THIS_MONTH">Bulan Ini</option>
+        </select>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: 'Total Penjualan', value: totalPenjualan, color: 'text-green-600' },
+          { label: 'Total DP Diterima', value: totalDP, color: 'text-blue-600' },
+          { label: 'Total Pelunasan', value: totalPelunasan, color: 'text-[#C5A059]' },
+          { label: 'Total Belum Dibayar', value: totalBelumDibayar, color: 'text-red-500' },
+        ].map((stat, i) => (
+          <Card key={i} className="p-6 border-l-4 border-l-[#C5A059]">
+            <p className="text-sm text-[#777777] mb-1">{stat.label}</p>
+            <h3 className={`text-2xl font-bold ${stat.color}`}>{formatIDR(stat.value)}</h3>
+          </Card>
+        ))}
+      </div>
+
+      <Card className="p-8 flex flex-col items-center justify-center min-h-[300px] bg-[#FEFDF0] border-dashed">
+        <IconPieChart className="w-16 h-16 text-[#D8C08A] mb-4" />
+        <h3 className="font-playfair text-xl text-[#333333]">Ringkasan Kinerja Bisnis</h3>
+        <p className="text-[#777777] text-sm text-center max-w-md mt-2">
+          Total <strong>{filteredInvoices.length}</strong> invoice tercatat pada periode ini dengan performa keuangan yang terekam otomatis.
+        </p>
+      </Card>
+    </div>
+  );
+};
+
+export default function App() {
+  const [isAuth, setIsAuth] = useLocalStorage('adrisya_auth', false);
+  const [currentRoute, setCurrentRoute] = useState('dashboard');
+  const [routeParam, setRouteParam] = useState(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const [invoices, setInvoices] = useLocalStorage('adrisya_invoices', []);
+  const [customers, setCustomers] = useLocalStorage('adrisya_customers', []);
+  const [products, setProducts] = useLocalStorage('adrisya_products', defaultProducts);
+  const [settings, setSettings] = useLocalStorage('adrisya_settings', defaultSettings);
+
+  useEffect(() => {
+    injectStyles();
+  }, []);
+
+  const navigate = (route, param = null) => {
+    setCurrentRoute(route);
+    setRouteParam(param);
+    setIsMobileMenuOpen(false);
+    window.scrollTo(0,0);
+  };
+
+  const handleLogout = () => { setIsAuth(false); };
+
+  const saveInvoice = (invoiceData, isNew) => {
+    if (isNew) {
+      setInvoices(prev => [...prev, invoiceData]);
+      const parts = invoiceData.invoiceNumber.split('-');
+      if (parts.length === 3) {
+        const num = parseInt(parts[2], 10);
+        setSettings(prev => ({ ...prev, lastInvoiceNumber: Math.max(prev.lastInvoiceNumber || 0, num) }));
+      }
+      
+      if (invoiceData.customerName && !invoiceData.customerId) {
+         const newCust = { id: generateId(), name: invoiceData.customerName, phone: invoiceData.customerPhone, address: invoiceData.customerAddress };
+         setCustomers(prev => [...prev, newCust]);
+         invoiceData.customerId = newCust.id;
+      }
+    } else {
+      setInvoices(prev => prev.map(inv => inv.id === invoiceData.id ? invoiceData : inv));
+    }
+  };
+
+  const deleteInvoice = (id) => setInvoices(prev => prev.filter(inv => inv.id !== id));
+  
+  const saveCustomer = (cust, isNew) => {
+    if(isNew) setCustomers(prev => [...prev, cust]);
+    else setCustomers(prev => prev.map(c => c.id === cust.id ? cust : c));
+  };
+  const deleteCustomer = (id) => setCustomers(prev => prev.filter(c => c.id !== id));
+
+  const saveProduct = (prod) => setProducts(prev => prev.map(p => p.id === prod.id ? prod : p));
+  const saveSettings = (newSet) => setSettings(newSet);
+
+  if (!isAuth) return <ViewLogin onLogin={() => setIsAuth(true)} settings={settings} />;
+
+  const navItems = [
+    { id: 'dashboard', label: 'Beranda', icon: 'Home' },
+    { id: 'invoices', label: 'Invoice', icon: 'FileText' },
+    { id: 'customers', label: 'Pelanggan', icon: 'Users' },
+    { id: 'products', label: 'Produk', icon: 'Package' },
+    { id: 'reports', label: 'Laporan', icon: 'PieChart' },
+    { id: 'settings', label: 'Pengaturan', icon: 'Settings' },
+  ];
+
+  return (
+    <div className="min-h-screen flex flex-col md:flex-row bg-[#F6F1E7]">
+      <aside className="hidden md:flex flex-col w-64 bg-white border-r border-[#F6F1E7] h-screen sticky top-0 no-print shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
+        <div className="p-6 border-b border-[#F6F1E7] text-center">
+          <h2 className="font-playfair text-xl font-bold text-[#C5A059] tracking-wider">ADRISYA DECORATION</h2>
+          <p className="text-xs text-[#777777] uppercase tracking-wider mt-1">Management</p>
+        </div>
+        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+          {navItems.map(item => {
+            const iconMap = { Home: IconHome, FileText: IconFileText, Users: IconUsers, Package: IconPackage, PieChart: IconPieChart, Settings: IconSettings };
+            const NavIcon = iconMap[item.icon];
+            return (
+              <button
+                key={item.id}
+                onClick={() => navigate(item.id)}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
+                  currentRoute.startsWith(item.id) || (currentRoute === 'invoice-form' && item.id === 'invoices') || (currentRoute === 'invoice-view' && item.id === 'invoices')
+                    ? 'bg-[#FEFDF0] text-[#C5A059] border border-[#D8C08A] shadow-sm' 
+                    : 'text-[#777777] hover:bg-gray-50 hover:text-[#B08D4A]'
+                }`}
+              >
+                {NavIcon && <NavIcon className="w-5 h-5" />}
+                {item.label}
+              </button>
+            );
+          })}
+        </nav>
+        <div className="p-4 border-t border-[#F6F1E7]">
+          <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-500 hover:bg-red-50 rounded-lg transition-colors font-medium">
+            <IconLogOut className="w-5 h-5" /> Keluar
+          </button>
+        </div>
+      </aside>
+
+      <header className="md:hidden bg-white border-b border-[#F6F1E7] p-4 flex justify-between items-center sticky top-0 z-50 no-print">
+        <h2 className="font-playfair text-lg font-bold text-[#C5A059]">ADRISYA DECORATION</h2>
+        <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-[#777777]">
+          {isMobileMenuOpen ? <IconX className="w-6 h-6" /> : <IconMenu className="w-6 h-6" />}
+        </button>
+      </header>
+
+      {isMobileMenuOpen && (
+        <div className="md:hidden fixed inset-0 top-[60px] bg-white z-40 p-4 space-y-2 no-print overflow-y-auto border-t border-[#F6F1E7]">
+           {navItems.map(item => {
+            const iconMap = { Home: IconHome, FileText: IconFileText, Users: IconUsers, Package: IconPackage, PieChart: IconPieChart, Settings: IconSettings };
+            const MenuIcon = iconMap[item.icon];
+            return (
+              <button
+                key={item.id}
+                onClick={() => navigate(item.id)}
+                className="w-full flex items-center gap-3 px-4 py-4 rounded-lg text-base font-medium text-left border-b border-gray-50 text-[#333333]"
+              >
+                {MenuIcon && <MenuIcon className="w-5 h-5 text-[#C5A059]" />}
+                {item.label}
+              </button>
+            );
+          })}
+           <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-4 rounded-lg text-base font-medium text-left text-red-500 mt-8">
+            <IconLogOut className="w-5 h-5" /> Keluar
+          </button>
+        </div>
+      )}
+
+      <main className="flex-1 p-4 md:p-8 overflow-y-auto w-full max-w-[100vw]">
+        <div className="max-w-7xl mx-auto">
+          {currentRoute === 'dashboard' && <ViewDashboard invoices={invoices} navigate={navigate} />}
+          {currentRoute === 'invoices' && <ViewInvoiceList invoices={invoices} navigate={navigate} onDelete={deleteInvoice} />}
+          {currentRoute === 'invoice-form' && <ViewInvoiceForm navigate={navigate} onSave={saveInvoice} customers={customers} products={products} settings={settings} initialData={routeParam ? invoices.find(i => i.id === routeParam) : null} />}
+          {currentRoute === 'invoice-view' && <ViewInvoiceDetail invoiceId={routeParam} invoices={invoices} settings={settings} navigate={navigate} />}
+          {currentRoute === 'customers' && <ViewCustomers customers={customers} onSave={saveCustomer} onDelete={deleteCustomer} invoices={invoices} />}
+          {currentRoute === 'products' && <ViewProducts products={products} onSave={saveProduct} />}
+          {currentRoute === 'reports' && <ViewReports invoices={invoices} />}
+          {currentRoute === 'settings' && <ViewSettings settings={settings} onSave={saveSettings} />}
+        </div>
+      </main>
+    </div>
+  );
+}
