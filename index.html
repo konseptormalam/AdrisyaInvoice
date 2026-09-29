@@ -1,1195 +1,180 @@
-import React, { useState, useEffect } from 'react';
+from pathlib import Path
 
-// --- INJECT CUSTOM STYLES & FONTS ---
-const injectStyles = () => {
-  const style = document.createElement('style');
-  style.innerHTML = `
-    @import url('https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,300;0,400;0,700;1,400&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap');
-    
-    :root {
-      --primary-gold: #C5A059;
-      --dark-gold: #B08D4A;
-      --champagne-gold: #D8C08A;
-      --ivory: #FEFDF0;
-      --warm-white: #FFFFFF;
-      --soft-beige: #F6F1E7;
-      --dark-text: #333333;
-      --muted-text: #777777;
-    }
-
-    body {
-      font-family: 'Lato', sans-serif;
-      background-color: var(--warm-white);
-      color: var(--dark-text);
-      -webkit-font-smoothing: antialiased;
-    }
-
-    h1, h2, h3, h4, h5, h6, .font-playfair {
-      font-family: 'Playfair Display', serif;
-    }
-
-    @media print {
-      body * {
-        visibility: hidden;
-      }
-      #printable-invoice, #printable-invoice * {
-        visibility: visible;
-      }
-      #printable-invoice {
-        position: absolute;
-        left: 0;
-        top: 0;
-        width: 100%;
-        background-color: white !important;
-        padding: 0 !important;
-      }
-      .no-print {
-        display: none !important;
-      }
-      @page { margin: 0.5cm; }
-    }
-    
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: var(--soft-beige); }
-    ::-webkit-scrollbar-thumb { background: var(--champagne-gold); border-radius: 10px; }
-    ::-webkit-scrollbar-thumb:hover { background: var(--primary-gold); }
-  `;
-  document.head.appendChild(style);
-};
-
-// --- CUSTOM SVG ICONS AS FUNCTIONS RETURNING JSX ---
-const IconHome = (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>;
-const IconFileText = (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>;
-const IconUsers = (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>;
-const IconPackage = (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"></line><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>;
-const IconBarChart = (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="20" x2="12" y2="10"></line><line x1="18" y1="20" x2="18" y2="4"></line><line x1="6" y1="20" x2="6" y2="16"></line></svg>;
-const IconSettings = (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>;
-const IconLogOut = (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>;
-const IconPlus = (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
-const IconMenu = (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>;
-const IconX = (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>;
-const IconTrash = (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>;
-const IconEdit = (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>;
-const IconPrinter = (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>;
-const IconShare = (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>;
-const IconSearch = (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>;
-const IconCheck = (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"></polyline></svg>;
-const IconEye = (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>;
-const IconChevronLeft = (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"></polyline></svg>;
-const IconPieChart = (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path><path d="M22 12A10 10 0 0 0 12 2v10z"></path></svg>;
-
-// --- UTILITIES ---
-const formatIDR = (number) => {
-  return new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0
-  }).format(number || 0);
-};
-
-const formatDate = (dateStr) => {
-  if (!dateStr) return '';
-  const date = new Date(dateStr);
-  return new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }).format(date);
-};
-
-const generateId = () => Math.random().toString(36).substr(2, 9);
-
-function useLocalStorage(key, initialValue) {
-  const [storedValue, setStoredValue] = useState(() => {
-    try {
-      const item = window.localStorage.getItem(key);
-      return item ? JSON.parse(item) : initialValue;
-    } catch (error) {
-      console.warn(error);
-      return initialValue;
-    }
-  });
-
-  const setValue = (value) => {
-    try {
-      const valueToStore = value instanceof Function ? value(storedValue) : value;
-      setStoredValue(valueToStore);
-      window.localStorage.setItem(key, JSON.stringify(valueToStore));
-    } catch (error) {
-      console.warn(error);
-    }
-  };
-  return [storedValue, setValue];
+html = r'''<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#C5A059">
+<title>Adrisya Decoration — Invoice Management System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+ --gold:#C5A059;--darkgold:#B08D4A;--champ:#D8C08A;--ivory:#FEFDF0;--white:#fff;
+ --beige:#F6F1E7;--text:#333;--muted:#777;--line:#e9e2d4;--danger:#b94a48;--success:#557a5d;
+ --shadow:0 10px 30px rgba(64,48,25,.07);--radius:16px;
 }
+*{box-sizing:border-box} body{margin:0;background:#fbfaf7;color:var(--text);font-family:Lato,Arial,sans-serif}
+button,input,select,textarea{font:inherit} button{cursor:pointer}
+h1,h2,h3,h4{font-family:"Playfair Display",serif;margin:0}
+.app{display:flex;min-height:100vh}
+.sidebar{width:250px;background:#fffefa;border-right:1px solid var(--line);padding:26px 18px;position:fixed;inset:0 auto 0 0;z-index:20}
+.brand{padding:6px 12px 25px;border-bottom:1px solid var(--line);margin-bottom:18px}
+.brand h2{font-size:22px;color:#2f2a24;letter-spacing:.3px}.brand span{font-size:11px;color:var(--gold);letter-spacing:1.6px;text-transform:uppercase}
+.nav{display:grid;gap:6px}.nav button{border:0;background:transparent;text-align:left;padding:12px 13px;border-radius:11px;color:#666;display:flex;gap:12px;align-items:center;font-weight:600}
+.nav button:hover,.nav button.active{background:var(--beige);color:#7b6332}.nav .icon{width:22px;text-align:center}
+.main{margin-left:250px;width:calc(100% - 250px);min-width:0}.topbar{height:74px;background:#fffefa;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 32px;position:sticky;top:0;z-index:10}
+.menuBtn{display:none;border:0;background:none;font-size:24px}.page{padding:30px 32px 50px;max-width:1500px;margin:auto}
+.pagehead{display:flex;justify-content:space-between;gap:15px;align-items:flex-start;margin-bottom:24px}.pagehead h1{font-size:31px}.subtitle{color:var(--muted);margin-top:6px}.goldline{width:55px;height:2px;background:var(--gold);margin-top:11px}
+.btn{border:1px solid var(--line);background:white;padding:10px 15px;border-radius:10px;font-weight:700;color:#5d574e;display:inline-flex;align-items:center;gap:8px}
+.btn:hover{border-color:var(--gold)}.btn.primary{background:var(--gold);border-color:var(--gold);color:white}.btn.primary:hover{background:var(--darkgold)}
+.btn.danger{color:var(--danger)}.btn.small{padding:7px 10px;font-size:13px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}.stat{background:white;border:1px solid var(--line);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow);position:relative;overflow:hidden}.stat:after{content:"";position:absolute;width:80px;height:80px;border-radius:50%;right:-30px;top:-30px;background:rgba(216,192,138,.16)}.statlabel{font-size:13px;color:var(--muted)}.statvalue{font-size:25px;font-weight:700;margin-top:8px}.staticon{float:right;font-size:22px;color:var(--gold)}
+.panel{background:white;border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:22px}.two{display:grid;grid-template-columns:1.6fr 1fr;gap:18px;margin-top:18px}
+.tablewrap{overflow:auto}.table{width:100%;border-collapse:collapse;min-width:680px}.table th{background:var(--beige);font-size:12px;text-transform:uppercase;letter-spacing:.4px;color:#746b5e;text-align:left}.table th,.table td{padding:12px;border-bottom:1px solid var(--line)}.table td{font-size:14px}.right{text-align:right!important}
+.badge{display:inline-flex;padding:5px 9px;border-radius:30px;font-size:11px;font-weight:800;letter-spacing:.4px}.badge.draft{background:#f1ece2;color:#796d5d}.badge.dp{background:#fff3cd;color:#8a6d1d}.badge.paid{background:#e8f3ea;color:var(--success)}.badge.unpaid{background:#fae8e7;color:var(--danger)}
+.formgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}.formgrid.three{grid-template-columns:repeat(3,1fr)}.field{display:grid;gap:7px}.field label{font-size:13px;font-weight:700;color:#5d574e}.field input,.field select,.field textarea{width:100%;border:1px solid var(--line);background:#fffdf9;border-radius:10px;padding:11px 12px;outline:none;color:var(--text)}.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(197,160,89,.1)}textarea{resize:vertical;min-height:80px}
+.section-title{font-size:20px;margin-bottom:16px}.actions{display:flex;gap:9px;flex-wrap:wrap}.mt{margin-top:18px}.mb{margin-bottom:18px}.empty{text-align:center;padding:35px;color:var(--muted)}
+.itemrow{display:grid;grid-template-columns:2.2fr .65fr 1fr 1fr 45px;gap:8px;align-items:center;margin-bottom:8px}.itemrow input,.itemrow select{width:100%;border:1px solid var(--line);padding:10px;border-radius:9px;background:#fffdf9}.remove{border:0;background:#f8e9e7;color:var(--danger);width:38px;height:38px;border-radius:9px}
+.totals{margin-left:auto;max-width:410px;display:grid;gap:8px}.totalrow{display:flex;justify-content:space-between;gap:20px;padding:5px 0}.totalrow.final{border-top:1px solid var(--line);margin-top:5px;padding-top:14px;font-size:19px;font-weight:800;color:#8a6d35}
+.toolbar{display:flex;gap:9px;flex-wrap:wrap}.toolbar input,.toolbar select{border:1px solid var(--line);background:white;padding:10px 12px;border-radius:10px}
+.kpi{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.mini{padding:15px;background:var(--beige);border-radius:12px}.mini small{color:var(--muted)}.mini strong{display:block;margin-top:5px;font-size:18px}
+.login{min-height:100vh;display:grid;place-items:center;padding:20px;background:radial-gradient(circle at 20% 20%,rgba(216,192,138,.2),transparent 35%),#fcfaf5}.login-card{width:min(430px,100%);background:white;border:1px solid var(--line);box-shadow:0 20px 60px rgba(60,45,25,.1);border-radius:22px;padding:38px}.login-brand{text-align:center;margin-bottom:28px}.login-brand h1{font-size:31px}.login-brand p{color:var(--gold);font-size:11px;letter-spacing:2px;text-transform:uppercase}.login .field{margin-bottom:15px}
+.overlay{position:fixed;inset:0;background:rgba(30,25,18,.35);display:none;align-items:center;justify-content:center;z-index:50;padding:15px}.modal{background:white;width:min(560px,100%);border-radius:18px;padding:24px;box-shadow:0 30px 80px rgba(0,0,0,.2);max-height:90vh;overflow:auto}.modalhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}.close{border:0;background:var(--beige);width:34px;height:34px;border-radius:50%}
+.invoice-paper{background:#fff;max-width:900px;margin:auto;border:1px solid #e6dfd1;padding:42px;box-shadow:0 10px 35px rgba(50,40,25,.06)}.invoice-head{display:flex;justify-content:space-between;gap:20px;border-bottom:1px solid var(--line);padding-bottom:22px}.invoice-brand h2{font-size:28px}.invoice-brand p{margin:5px 0;color:var(--muted);font-size:13px}.invoice-meta{text-align:right;font-size:13px}.invoice-meta strong{font-size:18px;color:#80652f}.bill{margin:24px 0;display:grid;grid-template-columns:1fr 1fr;gap:20px}.bill h4{font-family:Lato;font-size:11px;letter-spacing:1px;color:var(--gold);text-transform:uppercase;margin-bottom:7px}.invoice-table{width:100%;border-collapse:collapse}.invoice-table th,.invoice-table td{padding:11px 8px;border-bottom:1px solid #eee6d9}.invoice-table th{background:var(--beige);text-align:left;font-size:12px}.invoice-summary{margin:20px 0 0 auto;width:340px}.invoice-summary div{display:flex;justify-content:space-between;padding:6px}.invoice-summary .remain{border-top:1px solid var(--gold);margin-top:5px;padding-top:12px;font-size:19px;font-weight:800;color:#80652f}.bank{margin-top:28px;background:var(--beige);padding:15px;border-radius:10px;font-size:13px}.sign{text-align:right;margin-top:35px}.sign strong{display:block;margin-top:28px}.watermark{position:absolute;opacity:.09;font-size:80px;font-weight:900;transform:rotate(-18deg);left:50%;top:45%;color:var(--success);pointer-events:none}.relative{position:relative}
+.chart{height:220px;display:flex;align-items:flex-end;gap:10px;padding:15px 5px;border-bottom:1px solid var(--line)}.bar{flex:1;background:linear-gradient(to top,var(--champ),#eee4cc);border-radius:7px 7px 0 0;min-height:5px;position:relative}.bar span{position:absolute;bottom:-23px;left:50%;transform:translateX(-50%);font-size:10px;color:var(--muted)}
+.toast{position:fixed;right:20px;bottom:20px;background:#302c26;color:white;padding:13px 17px;border-radius:11px;box-shadow:var(--shadow);z-index:100;display:none}
+@media(max-width:950px){.sidebar{transform:translateX(-100%);transition:.2s}.sidebar.open{transform:translateX(0)}.main{margin-left:0;width:100%}.menuBtn{display:block}.topbar{padding:0 18px}.page{padding:22px 17px 40px}.grid4{grid-template-columns:repeat(2,1fr)}.two{grid-template-columns:1fr}.formgrid.three{grid-template-columns:1fr}.itemrow{grid-template-columns:1.5fr .6fr 1fr 1fr 40px}}
+@media(max-width:620px){.pagehead{display:block}.pagehead .actions{margin-top:15px}.grid4{grid-template-columns:1fr 1fr;gap:10px}.stat{padding:15px}.statvalue{font-size:19px}.formgrid,.bill{grid-template-columns:1fr}.panel{padding:16px}.invoice-paper{padding:22px}.invoice-head{display:block}.invoice-meta{text-align:left;margin-top:15px}.invoice-summary{width:100%}.kpi{grid-template-columns:1fr}.toolbar>*{width:100%}.itemrow{grid-template-columns:1fr 70px;gap:7px;padding:10px;background:#fffdf9;border:1px solid var(--line);border-radius:10px}.itemrow .wide{grid-column:1/-1}.itemrow .price,.itemrow .total{grid-column:auto}.login-card{padding:28px 22px}}
+@media print{body{background:white}.sidebar,.topbar,.no-print{display:none!important}.main{margin:0;width:100%}.page{padding:0}.invoice-paper{box-shadow:none;border:0;max-width:none;padding:20px}.overlay{position:static;display:block!important;background:white;padding:0}.modal{box-shadow:none;width:100%;max-width:none;padding:0}.modalhead{display:none}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div id="toast" class="toast"></div>
 
-// --- INITIAL DATA SEED ---
-const defaultProducts = [
-  { id: 'p1', name: 'Tray Putih', defaultPrice: 150000, active: true },
-  { id: 'p2', name: 'Tray Crystal', defaultPrice: 200000, active: true },
-  { id: 'p3', name: 'Hidden Tray', defaultPrice: 180000, active: true },
-  { id: 'p4', name: 'Hidden Box Ukir', defaultPrice: 250000, active: true },
-  { id: 'p5', name: 'Mahar', defaultPrice: 500000, active: true },
-  { id: 'p6', name: 'Standing Rotary', defaultPrice: 100000, active: true },
-  { id: 'p7', name: 'Tray Full Acrylic', defaultPrice: 220000, active: true },
-  { id: 'p8', name: 'Ongkos Kirim', defaultPrice: 50000, active: true },
-];
-
-const defaultSettings = {
-  businessName: 'Adrisya Decoration',
-  category: 'Mahar & Seserahan',
-  location: 'Banyuwangi',
-  phone1: '0896-6963-6206',
-  phone2: '0895-0600-8479',
-  instagram: '@adrisyadecoration',
-  tiktok: '@adrisya.decoration',
-  bank: 'SeaBank',
-  accountNumber: '901400783663',
-  accountName: 'Adellia Sartika Putri',
-  invoicePrefix: 'INV',
-  lastInvoiceNumber: 0,
-  adminUsername: 'admin',
-  adminPassword: 'adrisya123'
+<script>
+const KEY='adrisya_ims_v1';
+const defaultData={
+ invoices:[], customers:[], products:[
+  {id:'p1',name:'Tray Putih',defaultPrice:0,active:true},{id:'p2',name:'Tray Crystal',defaultPrice:0,active:true},
+  {id:'p3',name:'Hidden Tray',defaultPrice:0,active:true},{id:'p4',name:'Hidden Box Ukir',defaultPrice:0,active:true},
+  {id:'p5',name:'Mahar',defaultPrice:0,active:true},{id:'p6',name:'Standing Rotary',defaultPrice:0,active:true},
+  {id:'p7',name:'Tray Full Acrylic',defaultPrice:0,active:true},{id:'p8',name:'Ongkos Kirim',defaultPrice:0,active:true},
+  {id:'p9',name:'Custom',defaultPrice:0,active:true}
+ ],
+ settings:{businessName:'Adrisya Decoration',category:'Mahar & Seserahan',location:'Banyuwangi',
+ phone:'0896-6963-6206 / 0895-0600-8479',instagram:'@adrisyadecoration',tiktok:'@adrisya.decoration',
+ bank:'SeaBank',accountNumber:'901400783663',accountName:'Adellia Sartika Putri',invoicePrefix:'INV',lastInvoiceNumber:0,
+ username:'admin',password:'adrisya123'}
 };
-
-// --- REUSABLE UI COMPONENTS ---
-const Card = ({ children, className = '' }) => (
-  <div className={`bg-white rounded-xl shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] border border-[#F6F1E7] overflow-hidden ${className}`}>
-    {children}
-  </div>
-);
-
-const Button = ({ children, onClick, variant = 'primary', icon, className = '', type = 'button', disabled = false }) => {
-  const baseStyle = "flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed";
-  const variants = {
-    primary: "bg-[#C5A059] text-white hover:bg-[#B08D4A] shadow-md hover:shadow-lg",
-    secondary: "bg-[#F6F1E7] text-[#B08D4A] hover:bg-[#D8C08A] hover:text-white",
-    outline: "border border-[#C5A059] text-[#C5A059] hover:bg-[#F6F1E7]",
-    danger: "bg-red-50 text-red-500 hover:bg-red-500 hover:text-white",
-    ghost: "text-[#777777] hover:text-[#C5A059] hover:bg-[#F6F1E7]"
-  };
-  
-  const iconMap = {
-    Home: IconHome, FileText: IconFileText, Users: IconUsers, Package: IconPackage,
-    BarChart: IconBarChart, Settings: IconSettings, LogOut: IconLogOut, Plus: IconPlus,
-    Menu: IconMenu, X: IconX, Trash: IconTrash, Edit: IconEdit, Printer: IconPrinter,
-    Share: IconShare, Search: IconSearch, Check: IconCheck, Eye: IconEye,
-    ChevronLeft: IconChevronLeft, PieChart: IconPieChart
-  };
-  const IconComponent = icon && iconMap[icon] ? iconMap[icon] : null;
-
-  return (
-    <button type={type} onClick={onClick} disabled={disabled} className={`${baseStyle} ${variants[variant]} ${className}`}>
-      {IconComponent && <IconComponent className="w-4 h-4" />}
-      {children}
-    </button>
-  );
-};
-
-const Input = ({ label, type = 'text', value, onChange, placeholder, required = false, className = '', min, prefix, readOnly = false }) => (
-  <div className={`flex flex-col gap-1.5 ${className}`}>
-    {label && <label className="text-sm font-semibold text-[#333333]">{label} {required && <span className="text-red-500">*</span>}</label>}
-    <div className="relative">
-      {prefix && <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#777777]">{prefix}</div>}
-      <input
-        type={type}
-        value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-        required={required}
-        min={min}
-        readOnly={readOnly}
-        className={`w-full bg-white border border-[#D8C08A] rounded-lg px-3 py-2.5 outline-none transition-all focus:border-[#C5A059] focus:ring-1 focus:ring-[#C5A059] ${prefix ? 'pl-10' : ''} ${readOnly ? 'bg-gray-50 text-gray-600' : ''}`}
-      />
-    </div>
-  </div>
-);
-
-const Badge = ({ status }) => {
-  const styles = {
-    'LUNAS': 'bg-green-100 text-green-700 border-green-200',
-    'DP': 'bg-yellow-100 text-yellow-700 border-yellow-200',
-    'BELUM BAYAR': 'bg-red-100 text-red-700 border-red-200'
-  };
-  return (
-    <span className={`px-2.5 py-1 text-xs font-bold rounded-full border ${styles[status] || 'bg-gray-100'}`}>
-      {status}
-    </span>
-  );
-};
-
-// --- VIEWS ---
-
-const ViewLogin = ({ onLogin, settings }) => {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-
-  const handleLogin = (e) => {
-    e.preventDefault();
-    const adminUser = settings.adminUsername || 'admin';
-    const adminPass = settings.adminPassword || 'adrisya123';
-    if (username === adminUser && password === adminPass) {
-      onLogin();
-    } else {
-      setError('Username atau password salah.');
-    }
-  };
-
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-[#F6F1E7] p-4 relative overflow-hidden">
-      <div className="absolute top-[-10%] left-[-10%] w-[40vw] h-[40vw] rounded-full bg-[#D8C08A] opacity-20 blur-3xl"></div>
-      <div className="absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] rounded-full bg-[#C5A059] opacity-10 blur-3xl"></div>
-      
-      <Card className="w-full max-w-md p-8 relative z-10">
-        <div className="text-center mb-8">
-          <h1 className="font-playfair text-3xl font-bold text-[#C5A059] mb-2 tracking-wide">ADRISYA DECORATION</h1>
-          <p className="text-[#777777] text-sm mt-2">Invoice Management System</p>
-        </div>
-        
-        {error && <div className="bg-red-50 text-red-500 p-3 rounded-md text-sm text-center mb-4">{error}</div>}
-        
-        <form onSubmit={handleLogin} className="space-y-5">
-          <Input label="Username" value={username} onChange={e => setUsername(e.target.value)} placeholder="Masukkan username" required />
-          <Input label="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Masukkan password" required />
-          <Button type="submit" variant="primary" className="w-full mt-6 py-3 text-lg">MASUK</Button>
-        </form>
-      </Card>
-    </div>
-  );
-};
-
-const ViewDashboard = ({ invoices, navigate }) => {
-  const totalInvoices = invoices.length;
-  const belumLunas = invoices.filter(i => i.status !== 'LUNAS').length;
-  const lunas = invoices.filter(i => i.status === 'LUNAS').length;
-  const totalPendapatan = invoices.reduce((sum, i) => sum + (Number(i.dp) + Number(i.settlement)), 0);
-
-  const recentInvoices = [...invoices].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 5);
-
-  return (
-    <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="font-playfair text-3xl font-bold text-[#333333]">Selamat datang di Adrisya Decoration</h1>
-        <p className="text-[#777777] mt-1">Kelola invoice dan transaksi dengan mudah dan elegan.</p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: 'Total Invoice', value: totalInvoices, icon: 'FileText', color: 'text-blue-600', bg: 'bg-blue-50' },
-          { label: 'Belum Lunas', value: belumLunas, icon: 'Users', color: 'text-red-500', bg: 'bg-red-50' },
-          { label: 'Lunas', value: lunas, icon: 'Check', color: 'text-green-600', bg: 'bg-green-50' },
-          { label: 'Total Pendapatan', value: formatIDR(totalPendapatan), icon: 'BarChart', color: 'text-[#C5A059]', bg: 'bg-[#FEFDF0]' },
-        ].map((stat, i) => {
-          const iconMap = { FileText: IconFileText, Users: IconUsers, Check: IconCheck, BarChart: IconBarChart };
-          const StatIcon = iconMap[stat.icon];
-          return (
-            <Card key={i} className="p-5 flex items-center gap-4 border-l-4 border-l-[#C5A059]">
-              <div className={`p-3 rounded-full ${stat.bg}`}>
-                {StatIcon && <StatIcon className={`w-6 h-6 ${stat.color}`} />}
-              </div>
-              <div>
-                <p className="text-sm text-[#777777]">{stat.label}</p>
-                <h3 className="text-xl font-bold text-[#333333]">{stat.value}</h3>
-              </div>
-            </Card>
-          );
-        })}
-      </div>
-
-      <Card className="p-0">
-        <div className="p-5 border-b border-[#F6F1E7] flex justify-between items-center bg-[#FEFDF0]">
-          <h2 className="font-playfair text-xl font-bold text-[#333333]">Invoice Terbaru</h2>
-          <Button variant="ghost" className="text-sm" onClick={() => navigate('invoices')}>Lihat Semua</Button>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-[#F6F1E7] text-[#777777] text-sm">
-                <th className="p-4 font-semibold">No. Invoice</th>
-                <th className="p-4 font-semibold">Customer</th>
-                <th className="p-4 font-semibold">Tanggal</th>
-                <th className="p-4 font-semibold">Total</th>
-                <th className="p-4 font-semibold">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentInvoices.length === 0 ? (
-                <tr><td colSpan="5" className="p-8 text-center text-[#777777]">Belum ada invoice.</td></tr>
-              ) : recentInvoices.map(inv => (
-                <tr key={inv.id} className="border-b border-[#F6F1E7] hover:bg-[#FEFDF0] transition-colors">
-                  <td className="p-4 font-medium text-[#C5A059]">{inv.invoiceNumber}</td>
-                  <td className="p-4">{inv.customerName}</td>
-                  <td className="p-4">{formatDate(inv.invoiceDate)}</td>
-                  <td className="p-4 font-semibold">{formatIDR(inv.subtotal - inv.discount)}</td>
-                  <td className="p-4"><Badge status={inv.status} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-    </div>
-  );
-};
-
-const ViewInvoiceForm = ({ navigate, onSave, customers, products, settings, initialData = null }) => {
-  const isEdit = !!initialData;
-  const [formData, setFormData] = useState(initialData || {
-    id: generateId(),
-    invoiceNumber: '',
-    invoiceDate: new Date().toISOString().split('T')[0],
-    eventDate: '',
-    customerId: '',
-    customerName: '',
-    customerPhone: '',
-    customerAddress: '',
-    items: [],
-    subtotal: 0,
-    discount: 0,
-    dp: 0,
-    settlement: 0,
-    remaining: 0,
-    status: 'BELUM BAYAR',
-    notes: 'Terima kasih telah mempercayakan momen spesial Anda kepada Adrisya Decoration.',
-    createdAt: new Date().toISOString(),
-  });
-
-  useEffect(() => {
-    if (!isEdit && !formData.invoiceNumber) {
-      const year = new Date().getFullYear();
-      const nextNum = (settings.lastInvoiceNumber || 0) + 1;
-      const formattedNum = String(nextNum).padStart(3, '0');
-      setFormData(prev => ({ ...prev, invoiceNumber: `${settings.invoicePrefix}-${year}-${formattedNum}` }));
-    }
-  }, [isEdit, settings, formData.invoiceNumber]);
-
-  useEffect(() => {
-    const subtotal = formData.items.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
-    const totalAfterDiscount = subtotal - Number(formData.discount);
-    const paid = Number(formData.dp) + Number(formData.settlement);
-    let remaining = totalAfterDiscount - paid;
-    if (remaining < 0) remaining = 0;
-
-    let status = 'BELUM BAYAR';
-    if (remaining <= 0 && totalAfterDiscount > 0) status = 'LUNAS';
-    else if (paid > 0) status = 'DP';
-
-    setFormData(prev => ({ ...prev, subtotal, remaining, status }));
-  }, [formData.items, formData.discount, formData.dp, formData.settlement]);
-
-  const handleCustomerSelect = (e) => {
-    const id = e.target.value;
-    if (id) {
-      const c = customers.find(c => c.id === id);
-      setFormData(prev => ({
-        ...prev,
-        customerId: id,
-        customerName: c.name,
-        customerPhone: c.phone,
-        customerAddress: c.address
-      }));
-    } else {
-      setFormData(prev => ({ ...prev, customerId: '', customerName: '', customerPhone: '', customerAddress: '' }));
-    }
-  };
-
-  const addItem = (isCustom = false) => {
-    setFormData(prev => ({
-      ...prev,
-      items: [...prev.items, {
-        id: generateId(),
-        productId: '',
-        productName: isCustom ? 'Custom Product' : '',
-        qty: 1,
-        price: 0,
-        total: 0,
-        isCustom
-      }]
-    }));
-  };
-
-  const updateItem = (id, field, value) => {
-    setFormData(prev => ({
-      ...prev,
-      items: prev.items.map(item => {
-        if (item.id === id) {
-          const updatedItem = { ...item, [field]: value };
-          if (field === 'productId' && value) {
-            if (value === 'CUSTOM') {
-              updatedItem.isCustom = true;
-              updatedItem.productName = '';
-              updatedItem.price = 0;
-            } else {
-              const prod = products.find(p => p.id === value);
-              if (prod) {
-                updatedItem.isCustom = false;
-                updatedItem.productName = prod.name;
-                updatedItem.price = prod.defaultPrice;
-              }
-            }
-          }
-          if (['qty', 'price', 'productId', 'productName', 'isCustom'].includes(field)) {
-            updatedItem.total = Number(updatedItem.qty) * Number(updatedItem.price);
-          }
-          return updatedItem;
-        }
-        return item;
-      })
-    }));
-  };
-
-  const removeItem = (id) => {
-    setFormData(prev => ({ ...prev, items: prev.items.filter(i => i.id !== id) }));
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (formData.items.length === 0) {
-      alert("Mohon tambahkan minimal 1 item produk.");
-      return;
-    }
-    onSave(formData, !isEdit);
-    navigate('invoice-view', formData.id);
-  };
-
-  return (
-    <div className="space-y-6 pb-20">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" icon="ChevronLeft" onClick={() => navigate('invoices')}>Kembali</Button>
-        <h1 className="font-playfair text-2xl font-bold">{isEdit ? 'Edit Invoice' : 'Buat Invoice Baru'}</h1>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Card className="p-6 lg:col-span-1 space-y-4">
-            <h3 className="font-bold text-[#C5A059] border-b border-[#F6F1E7] pb-2 mb-4">Informasi Invoice</h3>
-            <Input label="Nomor Invoice" value={formData.invoiceNumber} readOnly={true} />
-            <Input label="Tanggal Invoice" type="date" value={formData.invoiceDate} onChange={e => setFormData({...formData, invoiceDate: e.target.value})} required />
-            <Input label="Tanggal Acara" type="date" value={formData.eventDate} onChange={e => setFormData({...formData, eventDate: e.target.value})} required />
-            
-            <div className="mt-4 p-4 bg-[#FEFDF0] rounded-lg border border-[#D8C08A] text-center">
-              <p className="text-sm text-[#777777] mb-1">Status Pembayaran</p>
-              <div className="text-lg"><Badge status={formData.status} /></div>
-            </div>
-          </Card>
-
-          <Card className="p-6 lg:col-span-2 space-y-4">
-             <div className="flex justify-between items-center border-b border-[#F6F1E7] pb-2 mb-4">
-                <h3 className="font-bold text-[#C5A059]">Data Pelanggan</h3>
-                <Button variant="outline" className="text-xs py-1.5 px-3" onClick={() => navigate('customers')}>+ Pelanggan Baru</Button>
-             </div>
-            
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-semibold text-[#333333]">Pilih Pelanggan dari Database</label>
-              <select 
-                className="w-full bg-white border border-[#D8C08A] rounded-lg px-3 py-2.5 outline-none focus:border-[#C5A059]"
-                value={formData.customerId}
-                onChange={handleCustomerSelect}
-              >
-                <option value="">-- Pilih atau Isi Manual --</option>
-                {customers.map(c => <option key={c.id} value={c.id}>{c.name} - {c.phone}</option>)}
-              </select>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Input label="Nama Pelanggan" value={formData.customerName} onChange={e => setFormData({...formData, customerName: e.target.value})} required />
-              <Input label="Nomor WhatsApp" value={formData.customerPhone} onChange={e => setFormData({...formData, customerPhone: e.target.value})} required />
-            </div>
-            <Input label="Alamat / Lokasi Acara" value={formData.customerAddress} onChange={e => setFormData({...formData, customerAddress: e.target.value})} />
-          </Card>
-        </div>
-
-        <Card className="p-6">
-          <h3 className="font-bold text-[#C5A059] border-b border-[#F6F1E7] pb-2 mb-4">Item Produk</h3>
-          
-          <div className="space-y-4">
-            {formData.items.map((item) => (
-              <div key={item.id} className="flex flex-col md:flex-row gap-4 items-start md:items-end bg-[#FEFDF0] p-4 rounded-lg border border-[#F6F1E7]">
-                <div className="w-full md:w-1/3">
-                  <label className="text-xs font-semibold text-[#777777] mb-1 block">Produk</label>
-                  <select 
-                    className="w-full bg-white border border-[#D8C08A] rounded-lg px-3 py-2.5 outline-none focus:border-[#C5A059]"
-                    value={item.isCustom ? 'CUSTOM' : item.productId}
-                    onChange={e => updateItem(item.id, 'productId', e.target.value)}
-                    required
-                  >
-                    <option value="">-- Pilih Produk --</option>
-                    {products.filter(p => p.active).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    <option value="CUSTOM">Custom Produk</option>
-                  </select>
-                  {item.isCustom && (
-                    <div className="mt-2">
-                      <Input placeholder="Nama produk custom..." value={item.productName} onChange={e => updateItem(item.id, 'productName', e.target.value)} required />
-                    </div>
-                  )}
-                </div>
-                <div className="w-full md:w-24">
-                  <Input label="Qty" type="number" min="1" value={item.qty} onChange={e => updateItem(item.id, 'qty', e.target.value)} required />
-                </div>
-                <div className="w-full md:w-1/4">
-                  <Input label="Harga (Rp)" type="number" min="0" value={item.price} onChange={e => updateItem(item.id, 'price', e.target.value)} required />
-                </div>
-                <div className="w-full md:w-1/4">
-                  <Input label="Total" value={formatIDR(item.total)} readOnly={true} />
-                </div>
-                <button type="button" onClick={() => removeItem(item.id)} className="p-2.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors mt-6">
-                  <IconTrash className="w-5 h-5" />
-                </button>
-              </div>
-            ))}
-
-            <div className="flex gap-4 pt-2">
-              <Button variant="outline" icon="Plus" onClick={() => addItem(false)}>Tambah Produk</Button>
-            </div>
-          </div>
-        </Card>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card className="p-6">
-             <h3 className="font-bold text-[#C5A059] border-b border-[#F6F1E7] pb-2 mb-4">Catatan Invoice</h3>
-             <textarea 
-                className="w-full h-32 bg-white border border-[#D8C08A] rounded-lg px-3 py-2.5 outline-none focus:border-[#C5A059] resize-none"
-                value={formData.notes}
-                onChange={e => setFormData({...formData, notes: e.target.value})}
-             ></textarea>
-          </Card>
-
-          <Card className="p-6 bg-[#FEFDF0]">
-            <h3 className="font-bold text-[#C5A059] border-b border-[#D8C08A] pb-2 mb-4">Ringkasan Pembayaran</h3>
-            <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-[#777777]">Subtotal</span>
-                <span className="font-semibold">{formatIDR(formData.subtotal)}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-[#777777]">Diskon (Rp)</span>
-                <input type="number" className="w-32 text-right border border-[#D8C08A] rounded p-1 outline-none" value={formData.discount} onChange={e => setFormData({...formData, discount: e.target.value})} />
-              </div>
-              <div className="flex justify-between items-center pt-2 border-t border-[#F6F1E7]">
-                <span className="font-bold text-[#333333]">Total Akhir</span>
-                <span className="font-bold text-lg text-[#C5A059]">{formatIDR(formData.subtotal - formData.discount)}</span>
-              </div>
-              <div className="flex justify-between items-center mt-4">
-                <span className="text-[#777777]">DP (Rp)</span>
-                <input type="number" className="w-32 text-right border border-[#D8C08A] rounded p-1 outline-none" value={formData.dp} onChange={e => setFormData({...formData, dp: e.target.value})} />
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-[#777777]">Pelunasan (Rp)</span>
-                <input type="number" className="w-32 text-right border border-[#D8C08A] rounded p-1 outline-none" value={formData.settlement} onChange={e => setFormData({...formData, settlement: e.target.value})} />
-              </div>
-              <div className="flex justify-between items-center pt-3 border-t border-dashed border-[#D8C08A] mt-2">
-                <span className="font-bold text-lg text-[#333333]">Sisa Bayar</span>
-                <span className={`font-bold text-xl ${formData.remaining <= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                  {formatIDR(formData.remaining)}
-                </span>
-              </div>
-            </div>
-          </Card>
-        </div>
-
-        <div className="flex justify-end gap-4 mt-8 bg-white p-4 rounded-xl shadow-sm border border-[#F6F1E7] sticky bottom-4 z-10">
-          <Button variant="ghost" onClick={() => navigate('invoices')}>Batal</Button>
-          <Button type="submit" variant="primary" icon="Check">Simpan Invoice</Button>
-        </div>
-      </form>
-    </div>
-  );
-};
-
-const ViewInvoiceDetail = ({ invoiceId, invoices, settings, navigate }) => {
-  const invoice = invoices.find(i => i.id === invoiceId);
-  
-  if (!invoice) return <div>Invoice tidak ditemukan.</div>;
-
-  const handlePrint = () => window.print();
-
-  const handleWhatsApp = () => {
-    const total = invoice.subtotal - invoice.discount;
-    const paid = Number(invoice.dp) + Number(invoice.settlement);
-    const text = `Halo Kak ${invoice.customerName},\n\nBerikut invoice dari *${settings.businessName}*.\n\nNo. Invoice: ${invoice.invoiceNumber}\nTotal: ${formatIDR(total)}\nDP: ${formatIDR(invoice.dp)}\nSisa pembayaran: ${formatIDR(invoice.remaining)}\nTanggal acara: ${formatDate(invoice.eventDate)}\n\nTerima kasih telah mempercayakan seserahan Anda kepada Adrisya Decoration.\n\n_“Menghias Seserahan dengan Hati, untuk Momen yang Berarti”_`;
-    
-    let phone = invoice.customerPhone.replace(/\D/g, '');
-    if (phone.startsWith('0')) phone = '62' + phone.substring(1);
-    
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank');
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap justify-between items-center gap-4 no-print">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" icon="ChevronLeft" onClick={() => navigate('invoices')}>Kembali</Button>
-          <h1 className="font-playfair text-2xl font-bold">Detail Invoice</h1>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" icon="Edit" onClick={() => navigate('invoice-form', invoiceId)}>Edit</Button>
-          <Button variant="secondary" icon="Printer" onClick={handlePrint}>Cetak</Button>
-          <Button variant="primary" icon="Share" onClick={handleWhatsApp}>Kirim WhatsApp</Button>
-        </div>
-      </div>
-
-      <div id="printable-invoice" className="bg-white p-8 md:p-12 rounded-xl shadow-lg border border-[#F6F1E7] max-w-4xl mx-auto relative overflow-hidden text-[#333333]">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-[#F6F1E7] rounded-bl-full opacity-50 z-0 no-print"></div>
-        
-        {invoice.status === 'LUNAS' && (
-          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-8xl font-bold text-[#C5A059] opacity-10 rotate-[-30deg] pointer-events-none border-8 border-[#C5A059] p-8 rounded-xl font-playfair tracking-widest z-0">
-            LUNAS
-          </div>
-        )}
-
-        <div className="relative z-10">
-          <div className="flex justify-between items-start border-b-2 border-[#D8C08A] pb-6 mb-8">
-            <div>
-              <h1 className="font-playfair text-4xl font-bold text-[#C5A059] tracking-wider uppercase">{settings.businessName}</h1>
-              <p className="text-md text-[#777777] mt-1 font-playfair italic">{settings.category} | {settings.location}</p>
-              <div className="text-sm mt-3 text-[#555]">
-                <p>WA: {settings.phone1} {settings.phone2 ? `| ${settings.phone2}` : ''}</p>
-                <p>IG: {settings.instagram} | TikTok: {settings.tiktok}</p>
-              </div>
-            </div>
-            <div className="text-right">
-              <h2 className="font-playfair text-3xl font-bold text-[#333333] mb-2 tracking-widest">INVOICE</h2>
-              <p className="text-sm"><strong>No:</strong> <span className="text-[#C5A059]">{invoice.invoiceNumber}</span></p>
-              <p className="text-sm"><strong>Tanggal:</strong> {formatDate(invoice.invoiceDate)}</p>
-              <div className="mt-4 bg-[#FEFDF0] p-2 rounded border border-[#F6F1E7] inline-block">
-                <p className="text-sm text-[#777777] mb-1">Status</p>
-                <Badge status={invoice.status} />
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-8 mb-8">
-            <div>
-              <h3 className="font-bold text-[#B08D4A] border-b border-[#F6F1E7] pb-1 mb-3">BILL TO</h3>
-              <p className="font-bold text-lg">{invoice.customerName}</p>
-              <p className="text-sm mt-1">{invoice.customerPhone}</p>
-              <p className="text-sm mt-1 max-w-xs">{invoice.customerAddress}</p>
-            </div>
-            <div className="text-right">
-              <h3 className="font-bold text-[#B08D4A] border-b border-[#F6F1E7] pb-1 mb-3">EVENT DETAIL</h3>
-              <p className="text-sm"><strong>Tanggal Acara:</strong></p>
-              <p className="font-bold text-lg text-[#333333]">{formatDate(invoice.eventDate)}</p>
-            </div>
-          </div>
-
-          <table className="w-full mb-8 border-collapse">
-            <thead>
-              <tr className="bg-[#F6F1E7] text-[#333333]">
-                <th className="py-3 px-4 text-left font-semibold">Deskripsi Produk</th>
-                <th className="py-3 px-4 text-center font-semibold w-24">Qty</th>
-                <th className="py-3 px-4 text-right font-semibold w-40">Harga (Rp)</th>
-                <th className="py-3 px-4 text-right font-semibold w-48">Total (Rp)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {invoice.items.map((item, idx) => (
-                <tr key={idx} className="border-b border-[#F6F1E7]">
-                  <td className="py-4 px-4">{item.productName}</td>
-                  <td className="py-4 px-4 text-center">{item.qty}</td>
-                  <td className="py-4 px-4 text-right">{formatIDR(item.price).replace('Rp', '')}</td>
-                  <td className="py-4 px-4 text-right font-medium">{formatIDR(item.total).replace('Rp', '')}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <div className="flex flex-col md:flex-row justify-between gap-8">
-            <div className="w-full md:w-1/2">
-              <h3 className="font-bold text-[#B08D4A] mb-2">Informasi Pembayaran</h3>
-              <div className="bg-[#FEFDF0] p-4 rounded-lg border border-[#F6F1E7] text-sm">
-                <p>Transfer Bank <strong>{settings.bank}</strong></p>
-                <p className="font-bold text-lg tracking-wider text-[#333333] my-1">{settings.accountNumber}</p>
-                <p>a/n <strong>{settings.accountName}</strong></p>
-              </div>
-              {invoice.notes && (
-                <div className="mt-4 text-sm text-[#777777] italic">
-                  <p><strong>Catatan:</strong></p>
-                  <p>{invoice.notes}</p>
-                </div>
-              )}
-            </div>
-
-            <div className="w-full md:w-1/2 lg:w-1/3">
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span>Subtotal</span>
-                  <span>{formatIDR(invoice.subtotal)}</span>
-                </div>
-                {Number(invoice.discount) > 0 && (
-                  <div className="flex justify-between text-red-500">
-                    <span>Diskon</span>
-                    <span>- {formatIDR(invoice.discount)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between font-bold pt-2 border-t border-[#F6F1E7] text-base">
-                  <span>Total Akhir</span>
-                  <span>{formatIDR(invoice.subtotal - invoice.discount)}</span>
-                </div>
-                <div className="flex justify-between text-[#777777] pt-2">
-                  <span>DP Dibayar</span>
-                  <span>{formatIDR(invoice.dp)}</span>
-                </div>
-                {Number(invoice.settlement) > 0 && (
-                  <div className="flex justify-between text-[#777777]">
-                    <span>Pelunasan</span>
-                    <span>{formatIDR(invoice.settlement)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between font-bold pt-3 mt-3 border-t-2 border-[#C5A059] text-xl">
-                  <span>SISA BAYAR</span>
-                  <span className={invoice.remaining <= 0 ? 'text-green-600' : 'text-[#C5A059]'}>
-                    {formatIDR(invoice.remaining)}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-16 pt-8 border-t border-[#F6F1E7] text-center">
-            <p className="font-playfair text-xl text-[#333333] mb-2">Hormat Kami,</p>
-            <h4 className="font-playfair font-bold text-[#C5A059] text-2xl mt-8 mb-4">{settings.businessName}</h4>
-            <p className="text-[#777777] italic font-playfair">“Menghias Seserahan dengan Hati, untuk Momen yang Berarti”</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const ViewInvoiceList = ({ invoices, navigate, onDelete }) => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('ALL');
-
-  const filtered = invoices.filter(inv => {
-    const matchSearch = inv.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                        inv.customerName.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchStatus = filterStatus === 'ALL' || inv.status === filterStatus;
-    return matchSearch && matchStatus;
-  }).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
-  return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h1 className="font-playfair text-2xl font-bold">Daftar Invoice</h1>
-        <Button variant="primary" icon="Plus" onClick={() => navigate('invoice-form')}>Buat Invoice</Button>
-      </div>
-
-      <Card className="p-4 flex flex-col sm:flex-row gap-4">
-        <div className="flex-1">
-          <Input placeholder="Cari nama customer atau no invoice..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} prefix={<IconSearch className="w-4 h-4" />} />
-        </div>
-        <select 
-          className="bg-white border border-[#D8C08A] rounded-lg px-3 py-2.5 outline-none focus:border-[#C5A059] w-full sm:w-48"
-          value={filterStatus}
-          onChange={e => setFilterStatus(e.target.value)}
-        >
-          <option value="ALL">Semua Status</option>
-          <option value="BELUM BAYAR">Belum Bayar</option>
-          <option value="DP">DP</option>
-          <option value="LUNAS">Lunas</option>
-        </select>
-      </Card>
-
-      <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-[#F6F1E7] text-[#777777] text-sm">
-                <th className="p-4 font-semibold">No. Invoice</th>
-                <th className="p-4 font-semibold">Customer</th>
-                <th className="p-4 font-semibold">Tgl Acara</th>
-                <th className="p-4 font-semibold text-right">Total</th>
-                <th className="p-4 font-semibold">Status</th>
-                <th className="p-4 font-semibold text-center">Aksi</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 ? (
-                <tr><td colSpan="6" className="p-8 text-center text-[#777777]">Tidak ada data ditemukan.</td></tr>
-              ) : filtered.map(inv => (
-                <tr key={inv.id} className="border-b border-[#F6F1E7] hover:bg-[#FEFDF0]">
-                  <td className="p-4 font-medium text-[#C5A059]">{inv.invoiceNumber}</td>
-                  <td className="p-4 font-medium">{inv.customerName}</td>
-                  <td className="p-4 text-sm">{formatDate(inv.eventDate)}</td>
-                  <td className="p-4 text-right font-semibold">{formatIDR(inv.subtotal - inv.discount)}</td>
-                  <td className="p-4"><Badge status={inv.status} /></td>
-                  <td className="p-4">
-                    <div className="flex justify-center gap-2">
-                      <button onClick={() => navigate('invoice-view', inv.id)} className="p-2 text-[#C5A059] hover:bg-[#F6F1E7] rounded" title="Lihat"><IconEye className="w-4 h-4" /></button>
-                      <button onClick={() => navigate('invoice-form', inv.id)} className="p-2 text-blue-500 hover:bg-blue-50 rounded" title="Edit"><IconEdit className="w-4 h-4" /></button>
-                      <button onClick={() => { if(window.confirm('Hapus invoice ini?')) onDelete(inv.id); }} className="p-2 text-red-500 hover:bg-red-50 rounded" title="Hapus"><IconTrash className="w-4 h-4" /></button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-    </div>
-  );
-};
-
-const ViewCustomers = ({ customers, onSave, onDelete, invoices }) => {
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingId, setEditingId] = useState(null);
-  const [form, setForm] = useState({ name: '', phone: '', address: '' });
-
-  const handleEdit = (c) => { setForm(c); setEditingId(c.id); setIsFormOpen(true); };
-  const handleNew = () => { setForm({ name: '', phone: '', address: '' }); setEditingId(null); setIsFormOpen(true); };
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onSave({ ...form, id: editingId || generateId() }, !editingId);
-    setIsFormOpen(false);
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="font-playfair text-2xl font-bold">Data Pelanggan</h1>
-        <Button variant="primary" icon="Plus" onClick={handleNew}>Pelanggan Baru</Button>
-      </div>
-
-      {isFormOpen && (
-        <Card className="p-6 border-l-4 border-l-[#C5A059] bg-[#FEFDF0]">
-          <h3 className="font-bold mb-4">{editingId ? 'Edit Pelanggan' : 'Tambah Pelanggan'}</h3>
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-            <Input label="Nama" value={form.name} onChange={e => setForm({...form, name: e.target.value})} required />
-            <Input label="WhatsApp" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} required />
-            <Input label="Alamat" value={form.address} onChange={e => setForm({...form, address: e.target.value})} />
-            <div className="md:col-span-3 flex justify-end gap-2 mt-2">
-              <Button variant="ghost" onClick={() => setIsFormOpen(false)}>Batal</Button>
-              <Button type="submit" variant="primary">Simpan</Button>
-            </div>
-          </form>
-        </Card>
-      )}
-
-      <Card>
-        <table className="w-full text-left">
-          <thead className="bg-[#F6F1E7]"><tr className="text-sm">
-            <th className="p-4">Nama</th><th className="p-4">WhatsApp</th><th className="p-4">Alamat</th><th className="p-4 text-center">Total Transaksi</th><th className="p-4 text-center">Aksi</th>
-          </tr></thead>
-          <tbody>
-            {customers.map(c => {
-              const custInvoices = invoices.filter(i => i.customerId === c.id || i.customerName.toLowerCase() === c.name.toLowerCase());
-              const totalSpent = custInvoices.reduce((sum, i) => sum + (i.subtotal - i.discount), 0);
-              return (
-                <tr key={c.id} className="border-b">
-                  <td className="p-4 font-medium">{c.name}</td>
-                  <td className="p-4">{c.phone}</td>
-                  <td className="p-4 text-sm">{c.address}</td>
-                  <td className="p-4 text-center font-semibold">{formatIDR(totalSpent)}</td>
-                  <td className="p-4 flex justify-center gap-2">
-                    <button onClick={() => handleEdit(c)} className="p-2 text-blue-500 hover:bg-blue-50 rounded"><IconEdit className="w-4 h-4" /></button>
-                    <button onClick={() => { if(window.confirm('Hapus?')) onDelete(c.id); }} className="p-2 text-red-500 hover:bg-red-50 rounded"><IconTrash className="w-4 h-4" /></button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </Card>
-    </div>
-  );
-};
-
-const ViewProducts = ({ products, onSave }) => {
-  const [editingId, setEditingId] = useState(null);
-  const [form, setForm] = useState({ name: '', defaultPrice: 0, active: true });
-
-  const handleEdit = (p) => { setForm(p); setEditingId(p.id); };
-  const handleSave = () => { onSave({ ...form, id: editingId }); setEditingId(null); };
-
-  return (
-    <div className="space-y-6">
-      <h1 className="font-playfair text-2xl font-bold">Katalog Produk</h1>
-      <Card>
-        <table className="w-full text-left">
-          <thead className="bg-[#F6F1E7]"><tr className="text-sm">
-            <th className="p-4">Nama Produk</th><th className="p-4">Harga Default (Rp)</th><th className="p-4 text-center">Status</th><th className="p-4 text-center">Aksi</th>
-          </tr></thead>
-          <tbody>
-            {products.map(p => (
-              <tr key={p.id} className="border-b">
-                <td className="p-4 font-medium">{p.name}</td>
-                <td className="p-4">
-                  {editingId === p.id ? 
-                    <input type="number" className="border p-1 rounded" value={form.defaultPrice} onChange={e=>setForm({...form, defaultPrice: e.target.value})} /> 
-                    : formatIDR(p.defaultPrice)}
-                </td>
-                <td className="p-4 text-center">
-                  <span className={`px-2 py-1 rounded text-xs ${p.active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>{p.active ? 'Aktif' : 'Nonaktif'}</span>
-                </td>
-                <td className="p-4 flex justify-center gap-2">
-                  {editingId === p.id ? (
-                     <Button variant="primary" className="py-1 px-2 text-xs" onClick={handleSave}>Simpan</Button>
-                  ) : (
-                    <button onClick={() => handleEdit(p)} className="p-2 text-[#C5A059] hover:bg-[#F6F1E7] rounded" title="Edit Harga"><IconEdit className="w-4 h-4" /></button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Card>
-    </div>
-  );
-};
-
-const ViewSettings = ({ settings, onSave }) => {
-  const [form, setForm] = useState(settings);
-  const handleSubmit = (e) => { e.preventDefault(); onSave(form); alert('Pengaturan disimpan!'); };
-
-  return (
-    <div className="space-y-6 max-w-4xl">
-      <h1 className="font-playfair text-2xl font-bold">Pengaturan Bisnis & Keamanan</h1>
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <Card className="p-6 space-y-4">
-          <h3 className="font-bold text-[#C5A059] border-b pb-2">Informasi Utama</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input label="Nama Bisnis" value={form.businessName} onChange={e=>setForm({...form, businessName: e.target.value})} />
-            <Input label="Kategori / Slogan Singkat" value={form.category} onChange={e=>setForm({...form, category: e.target.value})} />
-            <Input label="Lokasi" value={form.location} onChange={e=>setForm({...form, location: e.target.value})} />
-            <Input label="Prefix Invoice" value={form.invoicePrefix} onChange={e=>setForm({...form, invoicePrefix: e.target.value})} />
-          </div>
-        </Card>
-        <Card className="p-6 space-y-4">
-          <h3 className="font-bold text-[#C5A059] border-b pb-2">Keamanan Login</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input label="Username Admin" value={form.adminUsername || 'admin'} onChange={e=>setForm({...form, adminUsername: e.target.value})} />
-            <Input label="Password Admin" type="text" value={form.adminPassword || 'adrisya123'} onChange={e=>setForm({...form, adminPassword: e.target.value})} />
-          </div>
-        </Card>
-        <Card className="p-6 space-y-4">
-          <h3 className="font-bold text-[#C5A059] border-b pb-2">Kontak & Sosmed</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input label="WhatsApp 1" value={form.phone1} onChange={e=>setForm({...form, phone1: e.target.value})} />
-            <Input label="WhatsApp 2 (Opsional)" value={form.phone2} onChange={e=>setForm({...form, phone2: e.target.value})} />
-            <Input label="Instagram" value={form.instagram} onChange={e=>setForm({...form, instagram: e.target.value})} />
-            <Input label="TikTok" value={form.tiktok} onChange={e=>setForm({...form, tiktok: e.target.value})} />
-          </div>
-        </Card>
-        <Card className="p-6 space-y-4">
-          <h3 className="font-bold text-[#C5A059] border-b pb-2">Rekening Bank</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Input label="Nama Bank" value={form.bank} onChange={e=>setForm({...form, bank: e.target.value})} />
-            <Input label="Nomor Rekening" value={form.accountNumber} onChange={e=>setForm({...form, accountNumber: e.target.value})} />
-            <Input label="Atas Nama" value={form.accountName} onChange={e=>setForm({...form, accountName: e.target.value})} />
-          </div>
-        </Card>
-        <Button type="submit" variant="primary">Simpan Pengaturan</Button>
-      </form>
-    </div>
-  );
-};
-
-const ViewReports = ({ invoices }) => {
-  const [filterType, setFilterType] = useState('ALL');
-
-  const getFilteredInvoices = () => {
-    if (filterType === 'ALL') return invoices;
-    const now = new Date();
-    return invoices.filter(inv => {
-      const invDate = new Date(inv.invoiceDate);
-      if (filterType === 'TODAY') {
-        return invDate.toDateString() === now.toDateString();
-      }
-      if (filterType === 'THIS_WEEK') {
-        const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay()));
-        return invDate >= startOfWeek;
-      }
-      if (filterType === 'THIS_MONTH') {
-        return invDate.getMonth() === now.getMonth() && invDate.getFullYear() === now.getFullYear();
-      }
-      return true;
-    });
-  };
-
-  const filteredInvoices = getFilteredInvoices();
-  const totalPenjualan = filteredInvoices.reduce((sum, i) => sum + (i.subtotal - i.discount), 0);
-  const totalDP = filteredInvoices.reduce((sum, i) => sum + Number(i.dp), 0);
-  const totalPelunasan = filteredInvoices.reduce((sum, i) => sum + Number(i.settlement), 0);
-  const totalBelumDibayar = filteredInvoices.reduce((sum, i) => sum + Number(i.remaining), 0);
-
-  return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h1 className="font-playfair text-2xl font-bold">Laporan Penjualan</h1>
-        <select 
-          className="bg-white border border-[#D8C08A] rounded-lg px-4 py-2.5 outline-none focus:border-[#C5A059]"
-          value={filterType}
-          onChange={e => setFilterType(e.target.value)}
-        >
-          <option value="ALL">Semua Waktu</option>
-          <option value="TODAY">Hari Ini</option>
-          <option value="THIS_WEEK">Minggu Ini</option>
-          <option value="THIS_MONTH">Bulan Ini</option>
-        </select>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: 'Total Penjualan', value: totalPenjualan, color: 'text-green-600' },
-          { label: 'Total DP Diterima', value: totalDP, color: 'text-blue-600' },
-          { label: 'Total Pelunasan', value: totalPelunasan, color: 'text-[#C5A059]' },
-          { label: 'Total Belum Dibayar', value: totalBelumDibayar, color: 'text-red-500' },
-        ].map((stat, i) => (
-          <Card key={i} className="p-6 border-l-4 border-l-[#C5A059]">
-            <p className="text-sm text-[#777777] mb-1">{stat.label}</p>
-            <h3 className={`text-2xl font-bold ${stat.color}`}>{formatIDR(stat.value)}</h3>
-          </Card>
-        ))}
-      </div>
-
-      <Card className="p-8 flex flex-col items-center justify-center min-h-[300px] bg-[#FEFDF0] border-dashed">
-        <IconPieChart className="w-16 h-16 text-[#D8C08A] mb-4" />
-        <h3 className="font-playfair text-xl text-[#333333]">Ringkasan Kinerja Bisnis</h3>
-        <p className="text-[#777777] text-sm text-center max-w-md mt-2">
-          Total <strong>{filteredInvoices.length}</strong> invoice tercatat pada periode ini dengan performa keuangan yang terekam otomatis.
-        </p>
-      </Card>
-    </div>
-  );
-};
-
-export default function App() {
-  const [isAuth, setIsAuth] = useLocalStorage('adrisya_auth', false);
-  const [currentRoute, setCurrentRoute] = useState('dashboard');
-  const [routeParam, setRouteParam] = useState(null);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-  const [invoices, setInvoices] = useLocalStorage('adrisya_invoices', []);
-  const [customers, setCustomers] = useLocalStorage('adrisya_customers', []);
-  const [products, setProducts] = useLocalStorage('adrisya_products', defaultProducts);
-  const [settings, setSettings] = useLocalStorage('adrisya_settings', defaultSettings);
-
-  useEffect(() => {
-    injectStyles();
-  }, []);
-
-  const navigate = (route, param = null) => {
-    setCurrentRoute(route);
-    setRouteParam(param);
-    setIsMobileMenuOpen(false);
-    window.scrollTo(0,0);
-  };
-
-  const handleLogout = () => { setIsAuth(false); };
-
-  const saveInvoice = (invoiceData, isNew) => {
-    if (isNew) {
-      setInvoices(prev => [...prev, invoiceData]);
-      const parts = invoiceData.invoiceNumber.split('-');
-      if (parts.length === 3) {
-        const num = parseInt(parts[2], 10);
-        setSettings(prev => ({ ...prev, lastInvoiceNumber: Math.max(prev.lastInvoiceNumber || 0, num) }));
-      }
-      
-      if (invoiceData.customerName && !invoiceData.customerId) {
-         const newCust = { id: generateId(), name: invoiceData.customerName, phone: invoiceData.customerPhone, address: invoiceData.customerAddress };
-         setCustomers(prev => [...prev, newCust]);
-         invoiceData.customerId = newCust.id;
-      }
-    } else {
-      setInvoices(prev => prev.map(inv => inv.id === invoiceData.id ? invoiceData : inv));
-    }
-  };
-
-  const deleteInvoice = (id) => setInvoices(prev => prev.filter(inv => inv.id !== id));
-  
-  const saveCustomer = (cust, isNew) => {
-    if(isNew) setCustomers(prev => [...prev, cust]);
-    else setCustomers(prev => prev.map(c => c.id === cust.id ? cust : c));
-  };
-  const deleteCustomer = (id) => setCustomers(prev => prev.filter(c => c.id !== id));
-
-  const saveProduct = (prod) => setProducts(prev => prev.map(p => p.id === prod.id ? prod : p));
-  const saveSettings = (newSet) => setSettings(newSet);
-
-  if (!isAuth) return <ViewLogin onLogin={() => setIsAuth(true)} settings={settings} />;
-
-  const navItems = [
-    { id: 'dashboard', label: 'Beranda', icon: 'Home' },
-    { id: 'invoices', label: 'Invoice', icon: 'FileText' },
-    { id: 'customers', label: 'Pelanggan', icon: 'Users' },
-    { id: 'products', label: 'Produk', icon: 'Package' },
-    { id: 'reports', label: 'Laporan', icon: 'PieChart' },
-    { id: 'settings', label: 'Pengaturan', icon: 'Settings' },
-  ];
-
-  return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-[#F6F1E7]">
-      <aside className="hidden md:flex flex-col w-64 bg-white border-r border-[#F6F1E7] h-screen sticky top-0 no-print shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
-        <div className="p-6 border-b border-[#F6F1E7] text-center">
-          <h2 className="font-playfair text-xl font-bold text-[#C5A059] tracking-wider">ADRISYA DECORATION</h2>
-          <p className="text-xs text-[#777777] uppercase tracking-wider mt-1">Management</p>
-        </div>
-        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-          {navItems.map(item => {
-            const iconMap = { Home: IconHome, FileText: IconFileText, Users: IconUsers, Package: IconPackage, PieChart: IconPieChart, Settings: IconSettings };
-            const NavIcon = iconMap[item.icon];
-            return (
-              <button
-                key={item.id}
-                onClick={() => navigate(item.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-                  currentRoute.startsWith(item.id) || (currentRoute === 'invoice-form' && item.id === 'invoices') || (currentRoute === 'invoice-view' && item.id === 'invoices')
-                    ? 'bg-[#FEFDF0] text-[#C5A059] border border-[#D8C08A] shadow-sm' 
-                    : 'text-[#777777] hover:bg-gray-50 hover:text-[#B08D4A]'
-                }`}
-              >
-                {NavIcon && <NavIcon className="w-5 h-5" />}
-                {item.label}
-              </button>
-            );
-          })}
-        </nav>
-        <div className="p-4 border-t border-[#F6F1E7]">
-          <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-500 hover:bg-red-50 rounded-lg transition-colors font-medium">
-            <IconLogOut className="w-5 h-5" /> Keluar
-          </button>
-        </div>
-      </aside>
-
-      <header className="md:hidden bg-white border-b border-[#F6F1E7] p-4 flex justify-between items-center sticky top-0 z-50 no-print">
-        <h2 className="font-playfair text-lg font-bold text-[#C5A059]">ADRISYA DECORATION</h2>
-        <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-[#777777]">
-          {isMobileMenuOpen ? <IconX className="w-6 h-6" /> : <IconMenu className="w-6 h-6" />}
-        </button>
-      </header>
-
-      {isMobileMenuOpen && (
-        <div className="md:hidden fixed inset-0 top-[60px] bg-white z-40 p-4 space-y-2 no-print overflow-y-auto border-t border-[#F6F1E7]">
-           {navItems.map(item => {
-            const iconMap = { Home: IconHome, FileText: IconFileText, Users: IconUsers, Package: IconPackage, PieChart: IconPieChart, Settings: IconSettings };
-            const MenuIcon = iconMap[item.icon];
-            return (
-              <button
-                key={item.id}
-                onClick={() => navigate(item.id)}
-                className="w-full flex items-center gap-3 px-4 py-4 rounded-lg text-base font-medium text-left border-b border-gray-50 text-[#333333]"
-              >
-                {MenuIcon && <MenuIcon className="w-5 h-5 text-[#C5A059]" />}
-                {item.label}
-              </button>
-            );
-          })}
-           <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-4 rounded-lg text-base font-medium text-left text-red-500 mt-8">
-            <IconLogOut className="w-5 h-5" /> Keluar
-          </button>
-        </div>
-      )}
-
-      <main className="flex-1 p-4 md:p-8 overflow-y-auto w-full max-w-[100vw]">
-        <div className="max-w-7xl mx-auto">
-          {currentRoute === 'dashboard' && <ViewDashboard invoices={invoices} navigate={navigate} />}
-          {currentRoute === 'invoices' && <ViewInvoiceList invoices={invoices} navigate={navigate} onDelete={deleteInvoice} />}
-          {currentRoute === 'invoice-form' && <ViewInvoiceForm navigate={navigate} onSave={saveInvoice} customers={customers} products={products} settings={settings} initialData={routeParam ? invoices.find(i => i.id === routeParam) : null} />}
-          {currentRoute === 'invoice-view' && <ViewInvoiceDetail invoiceId={routeParam} invoices={invoices} settings={settings} navigate={navigate} />}
-          {currentRoute === 'customers' && <ViewCustomers customers={customers} onSave={saveCustomer} onDelete={deleteCustomer} invoices={invoices} />}
-          {currentRoute === 'products' && <ViewProducts products={products} onSave={saveProduct} />}
-          {currentRoute === 'reports' && <ViewReports invoices={invoices} />}
-          {currentRoute === 'settings' && <ViewSettings settings={settings} onSave={saveSettings} />}
-        </div>
-      </main>
-    </div>
-  );
+let data=load(), state={page:'dashboard',editing:null,viewing:null,customerSearch:'',invoiceSearch:'',invoiceStatus:'ALL',invoicePeriod:'ALL'};
+function load(){try{return {...defaultData,...JSON.parse(localStorage.getItem(KEY)||'{}')}}catch(e){return defaultData}}
+function save(){localStorage.setItem(KEY,JSON.stringify(data))}
+function rupiah(n){return new Intl.NumberFormat('id-ID',{style:'currency',currency:'IDR',maximumFractionDigits:0}).format(Number(n)||0)}
+function num(v){return Math.max(0,Number(String(v).replace(/[^\d.-]/g,''))||0)}
+function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
+function fmtDate(s){if(!s)return'-';return new Date(s+'T00:00:00').toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'})}
+function toast(t){let x=document.getElementById('toast');x.textContent=t;x.style.display='block';setTimeout(()=>x.style.display='none',2200)}
+function statusFor(inv){let total=inv.subtotal-inv.discount; if((inv.dp||0)+(inv.settlement||0)>=total)return 'LUNAS';if((inv.dp||0)>0)return 'DP';return 'BELUM BAYAR'}
+function badge(s){return `<span class="badge ${s==='LUNAS'?'paid':s==='DP'?'dp':'unpaid'}">${s}</span>`}
+function nextNumber(){data.settings.lastInvoiceNumber=(Number(data.settings.lastInvoiceNumber)||0)+1;save();return `${data.settings.invoicePrefix}-${new Date().getFullYear()}-${String(data.settings.lastInvoiceNumber).padStart(3,'0')}`}
+function nav(page){state.page=page;state.editing=null;state.viewing=null;render();closeSidebar()}
+function closeSidebar(){document.querySelector('.sidebar')?.classList.remove('open')}
+function layout(content){
+return `<div class="app">
+<aside class="sidebar"><div class="brand"><h2>Adrisya Decoration</h2><span>Mahar & Seserahan</span></div>
+<nav class="nav">
+<button class="${state.page==='dashboard'?'active':''}" onclick="nav('dashboard')"><span class="icon">⌂</span>Beranda</button>
+<button class="${state.page==='invoices'?'active':''}" onclick="nav('invoices')"><span class="icon">▤</span>Invoice</button>
+<button class="${state.page==='new'?'active':''}" onclick="newInvoice()"><span class="icon">＋</span>Buat Invoice</button>
+<button class="${state.page==='customers'?'active':''}" onclick="nav('customers')"><span class="icon">♙</span>Pelanggan</button>
+<button class="${state.page==='products'?'active':''}" onclick="nav('products')"><span class="icon">◇</span>Produk</button>
+<button class="${state.page==='reports'?'active':''}" onclick="nav('reports')"><span class="icon">◒</span>Laporan</button>
+<button class="${state.page==='settings'?'active':''}" onclick="nav('settings')"><span class="icon">⚙</span>Pengaturan</button>
+</nav></aside>
+<main class="main"><header class="topbar"><button class="menuBtn" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰</button><div><strong>${esc(data.settings.businessName)}</strong></div><button class="btn small" onclick="logout()">Keluar</button></header>${content}</main></div>`
 }
+function render(){
+if(sessionStorage.getItem('adrisya_login')!=='yes'){renderLogin();return}
+let c=state.page==='dashboard'?dashboard():state.page==='invoices'?invoicesPage():state.page==='new'?invoiceForm():state.page==='customers'?customersPage():state.page==='products'?productsPage():state.page==='reports'?reportsPage():settingsPage();
+document.getElementById('root').innerHTML=layout(c)
+}
+function renderLogin(){document.getElementById('root').innerHTML=`<div class="login"><div class="login-card">
+<div class="login-brand"><h1>Adrisya Decoration</h1><p>Invoice Management System</p><div class="goldline" style="margin:14px auto"></div></div>
+<form onsubmit="event.preventDefault();login()"><div class="field"><label>Username</label><input id="loginUser" autocomplete="username" required></div><div class="field"><label>Password</label><input id="loginPass" type="password" autocomplete="current-password" required></div><button class="btn primary" style="width:100%;justify-content:center;padding:13px;margin-top:5px">MASUK</button></form>
+<p style="font-size:12px;color:#999;text-align:center;margin-top:18px">Sistem internal Adrisya Decoration</p></div></div>`}
+function login(){if(document.getElementById('loginUser').value===data.settings.username&&document.getElementById('loginPass').value===data.settings.password){sessionStorage.setItem('adrisya_login','yes');render()}else toast('Username atau password salah')}
+function logout(){sessionStorage.removeItem('adrisya_login');render()}
+function dashboard(){
+let inv=data.invoices, total=inv.reduce((a,i)=>a+i.subtotal-i.discount,0), paid=inv.reduce((a,i)=>a+i.dp+i.settlement,0), unpaid=total-paid;
+return `<section class="page"><div class="pagehead"><div><h1>Selamat datang di Adrisya Decoration</h1><p class="subtitle">Kelola invoice dan transaksi dengan mudah.</p><div class="goldline"></div></div><div class="actions"><button class="btn primary" onclick="newInvoice()">＋ Buat Invoice</button></div></div>
+<div class="grid4"><div class="stat"><span class="staticon">▤</span><div class="statlabel">Total Invoice</div><div class="statvalue">${inv.length}</div></div>
+<div class="stat"><span class="staticon">◐</span><div class="statlabel">Belum Lunas</div><div class="statvalue">${rupiah(unpaid)}</div></div>
+<div class="stat"><span class="staticon">✓</span><div class="statlabel">Lunas</div><div class="statvalue">${inv.filter(i=>statusFor(i)==='LUNAS').length}</div></div>
+<div class="stat"><span class="staticon">◆</span><div class="statlabel">Total Pendapatan</div><div class="statvalue">${rupiah(total)}</div></div></div>
+<div class="two"><div class="panel"><div class="pagehead" style="margin-bottom:12px"><h2 class="section-title">Invoice Terbaru</h2><button class="btn small" onclick="nav('invoices')">Lihat Semua</button></div>${recentInvoices(inv)}</div>
+<div class="panel"><h2 class="section-title">Ringkasan Pembayaran</h2><div class="kpi"><div class="mini"><small>Total DP</small><strong>${rupiah(inv.reduce((a,i)=>a+i.dp,0))}</strong></div><div class="mini"><small>Pelunasan</small><strong>${rupiah(inv.reduce((a,i)=>a+i.settlement,0))}</strong></div><div class="mini"><small>Outstanding</small><strong>${rupiah(unpaid)}</strong></div></div></div></div></section>`
+}
+function recentInvoices(inv){let arr=[...inv].sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)).slice(0,7);if(!arr.length)return `<div class="empty">Belum ada invoice.</div>`;return `<div class="tablewrap"><table class="table"><thead><tr><th>Invoice</th><th>Customer</th><th>Tanggal</th><th>Total</th><th>Status</th></tr></thead><tbody>${arr.map(i=>`<tr onclick="viewInvoice('${i.id}')" style="cursor:pointer"><td><b>${esc(i.invoiceNumber)}</b></td><td>${esc(i.customerName)}</td><td>${fmtDate(i.invoiceDate)}</td><td>${rupiah(i.subtotal-i.discount)}</td><td>${badge(statusFor(i))}</td></tr>`).join('')}</tbody></table></div>`}
+function newInvoice(){state.page='new';state.editing=null;render()}
+function invoiceForm(){
+let inv=state.editing||{invoiceNumber:nextNumber(),invoiceDate:new Date().toISOString().slice(0,10),eventDate:'',customerId:'',customerName:'',customerPhone:'',customerAddress:'',items:[{productId:'p1',name:'Tray Putih',qty:1,price:0}],discount:0,dp:0,settlement:0,notes:''};
+state.tempInvoice=JSON.parse(JSON.stringify(inv));let x=state.tempInvoice;
+return `<section class="page"><div class="pagehead"><div><h1>${state.editing?'Edit Invoice':'Buat Invoice Baru'}</h1><p class="subtitle">${esc(x.invoiceNumber)}</p></div><button class="btn" onclick="nav('invoices')">← Kembali</button></div>
+<div class="panel"><h2 class="section-title">Informasi Invoice</h2><div class="formgrid three">
+<div class="field"><label>Nomor Invoice</label><input value="${esc(x.invoiceNumber)}" readonly></div>
+<div class="field"><label>Tanggal Invoice</label><input id="fInvoiceDate" type="date" value="${x.invoiceDate}"></div>
+<div class="field"><label>Tanggal Acara</label><input id="fEventDate" type="date" value="${x.eventDate}"></div></div></div>
+<div class="panel mt"><h2 class="section-title">Data Customer</h2><div class="formgrid"><div class="field"><label>Pilih Pelanggan</label><select id="customerSelect" onchange="fillCustomer(this.value)"><option value="">+ Customer baru</option>${data.customers.map(c=>`<option value="${c.id}" ${c.id===x.customerId?'selected':''}>${esc(c.name)} — ${esc(c.phone)}</option>`).join('')}</select></div><div></div>
+<div class="field"><label>Nama Pelanggan</label><input id="fName" value="${esc(x.customerName)}"></div><div class="field"><label>Nomor WhatsApp</label><input id="fPhone" value="${esc(x.customerPhone)}" placeholder="08xxxxxxxxxx"></div><div class="field"><label>Alamat</label><textarea id="fAddress">${esc(x.customerAddress)}</textarea></div><div class="field"><label>Catatan</label><textarea id="fNotes">${esc(x.notes)}</textarea></div></div></div>
+<div class="panel mt"><div class="pagehead"><h2 class="section-title">Item Produk</h2><button class="btn small" onclick="addItem()">＋ Tambah Item</button></div>
+<div id="items">${x.items.map((it,i)=>itemRow(it,i)).join('')}</div><div class="totals mt"><div class="totalrow"><span>Subtotal</span><strong id="subtotal">Rp 0</strong></div><div class="totalrow"><span>Diskon</span><input id="discount" type="number" min="0" value="${x.discount}" oninput="calcInvoice()" style="width:150px;padding:8px;border:1px solid var(--line);border-radius:8px;text-align:right"></div><div class="totalrow"><span>DP</span><input id="dp" type="number" min="0" value="${x.dp}" oninput="calcInvoice()" style="width:150px;padding:8px;border:1px solid var(--line);border-radius:8px;text-align:right"></div><div class="totalrow"><span>Pelunasan</span><input id="settlement" type="number" min="0" value="${x.settlement}" oninput="calcInvoice()" style="width:150px;padding:8px;border:1px solid var(--line);border-radius:8px;text-align:right"></div><div class="totalrow final"><span>Sisa Bayar</span><strong id="remaining">Rp 0</strong></div><div id="formStatus" style="text-align:right"></div></div></div>
+<div class="panel mt"><div class="actions"><button class="btn primary" onclick="saveInvoiceForm()">✓ Simpan Invoice</button><button class="btn" onclick="nav('invoices')">Batal</button></div></div></section>`
+}
+function itemRow(it,i){let opts=data.products.filter(p=>p.active).map(p=>`<option value="${p.id}" ${p.id===it.productId?'selected':''}>${esc(p.name)}</option>`).join('');return `<div class="itemrow" data-i="${i}"><select class="itemProduct wide" onchange="productChange(${i},this.value)">${opts}</select><input class="itemQty" type="number" min="1" value="${it.qty}" oninput="calcInvoice()"><input class="itemPrice price" type="number" min="0" value="${it.price}" oninput="calcInvoice()"><input class="itemTotal total" value="${rupiah(it.qty*it.price)}" readonly><button class="remove" onclick="removeItem(${i})">×</button></div>`}
+function fillCustomer(id){let c=data.customers.find(x=>x.id===id);if(!c)return;document.getElementById('fName').value=c.name;document.getElementById('fPhone').value=c.phone;document.getElementById('fAddress').value=c.address||''}
+function productChange(i,id){let p=data.products.find(x=>x.id===id);let row=document.querySelectorAll('.itemrow')[i];if(p){row.querySelector('.itemPrice').value=p.defaultPrice||0}calcInvoice()}
+function addItem(){state.tempInvoice.items.push({productId:data.products[0]?.id||'',name:data.products[0]?.name||'',qty:1,price:data.products[0]?.defaultPrice||0});document.getElementById('items').innerHTML=state.tempInvoice.items.map((it,i)=>itemRow(it,i)).join('');calcInvoice()}
+function removeItem(i){if(state.tempInvoice.items.length===1)return;state.tempInvoice.items.splice(i,1);document.getElementById('items').innerHTML=state.tempInvoice.items.map((it,j)=>itemRow(it,j)).join('');calcInvoice()}
+function calcInvoice(){let rows=[...document.querySelectorAll('.itemrow')],sub=0;rows.forEach((r,i)=>{let q=num(r.querySelector('.itemQty').value)||1,p=num(r.querySelector('.itemPrice').value);sub+=q*p;r.querySelector('.itemTotal').value=rupiah(q*p)});let d=num(document.getElementById('discount')?.value),dp=num(document.getElementById('dp')?.value),set=num(document.getElementById('settlement')?.value),rem=Math.max(0,sub-d-dp-set);if(document.getElementById('subtotal'))document.getElementById('subtotal').textContent=rupiah(sub);if(document.getElementById('remaining'))document.getElementById('remaining').textContent=rupiah(rem);if(document.getElementById('formStatus'))document.getElementById('formStatus').innerHTML=badge(rem===0?'LUNAS':dp>0?'DP':'BELUM BAYAR')}
+function saveInvoiceForm(){let rows=[...document.querySelectorAll('.itemrow')],items=rows.map(r=>{let p=r.querySelector('.itemProduct'),opt=p.options[p.selectedIndex];return {productId:p.value,name:opt?opt.textContent:'Custom',qty:num(r.querySelector('.itemQty').value)||1,price:num(r.querySelector('.itemPrice').value)}});let sub=items.reduce((a,x)=>a+x.qty*x.price,0),inv={...state.tempInvoice,invoiceDate:document.getElementById('fInvoiceDate').value,eventDate:document.getElementById('fEventDate').value,customerId:document.getElementById('customerSelect').value,customerName:document.getElementById('fName').value.trim(),customerPhone:document.getElementById('fPhone').value.trim(),customerAddress:document.getElementById('fAddress').value.trim(),notes:document.getElementById('fNotes').value.trim(),items,subtotal:sub,discount:num(document.getElementById('discount').value),dp:num(document.getElementById('dp').value),settlement:num(document.getElementById('settlement').value),remaining:Math.max(0,sub-num(document.getElementById('discount').value)-num(document.getElementById('dp').value)-num(document.getElementById('settlement').value)),updatedAt:new Date().toISOString()};inv.status=statusFor(inv);if(!inv.customerName){toast('Nama customer wajib diisi');return}let old=state.editing;if(old){let ix=data.invoices.findIndex(x=>x.id===old.id);inv.id=old.id;inv.createdAt=old.createdAt;data.invoices[ix]=inv}else{inv.id=crypto.randomUUID();inv.createdAt=new Date().toISOString();data.invoices.push(inv)}if(inv.customerName){let c=data.customers.find(c=>c.id===inv.customerId||c.phone===inv.customerPhone);if(c){c.name=inv.customerName;c.phone=inv.customerPhone;c.address=inv.customerAddress}else{data.customers.push({id:crypto.randomUUID(),name:inv.customerName,phone:inv.customerPhone,address:inv.customerAddress,notes:'',createdAt:new Date().toISOString()})}}save();state.page='invoices';state.editing=null;render();toast('Invoice berhasil disimpan')}
+function invoicesPage(){let arr=[...data.invoices].sort((a,b)=>new Date(b.invoiceDate)-new Date(a.invoiceDate));let q=state.invoiceSearch.toLowerCase();arr=arr.filter(i=>(!q||i.invoiceNumber.toLowerCase().includes(q)||i.customerName.toLowerCase().includes(q))&&(!state.invoiceStatus||state.invoiceStatus==='ALL'||statusFor(i)===state.invoiceStatus));return `<section class="page"><div class="pagehead"><div><h1>Daftar Invoice</h1><p class="subtitle">Kelola seluruh invoice Adrisya Decoration.</p></div><button class="btn primary" onclick="newInvoice()">＋ Buat Invoice</button></div><div class="panel"><div class="toolbar mb"><input placeholder="Cari invoice / customer..." value="${esc(state.invoiceSearch)}" oninput="state.invoiceSearch=this.value;render()"><select onchange="state.invoiceStatus=this.value;render()"><option value="ALL">Semua Status</option><option value="BELUM BAYAR" ${state.invoiceStatus==='BELUM BAYAR'?'selected':''}>Belum Bayar</option><option value="DP" ${state.invoiceStatus==='DP'?'selected':''}>DP</option><option value="LUNAS" ${state.invoiceStatus==='LUNAS'?'selected':''}>Lunas</option></select></div><div class="tablewrap">${invoiceTable(arr)}</div></div></section>`}
+function invoiceTable(arr){if(!arr.length)return `<div class="empty">Tidak ada invoice yang sesuai.</div>`;return `<table class="table"><thead><tr><th>Invoice</th><th>Customer</th><th>Tgl Acara</th><th>Total</th><th>Sisa</th><th>Status</th><th>Aksi</th></tr></thead><tbody>${arr.map(i=>`<tr><td><b>${esc(i.invoiceNumber)}</b><br><small>${fmtDate(i.invoiceDate)}</small></td><td>${esc(i.customerName)}<br><small>${esc(i.customerPhone)}</small></td><td>${fmtDate(i.eventDate)}</td><td>${rupiah(i.subtotal-i.discount)}</td><td>${rupiah(i.remaining)}</td><td>${badge(statusFor(i))}</td><td><div class="actions"><button class="btn small" onclick="viewInvoice('${i.id}')">Lihat</button><button class="btn small" onclick="editInvoice('${i.id}')">Edit</button><button class="btn small danger" onclick="deleteInvoice('${i.id}')">Hapus</button></div></td></tr>`).join('')}</tbody></table>`}
+function editInvoice(id){state.editing=data.invoices.find(i=>i.id===id);state.page='new';render()}
+function deleteInvoice(id){let i=data.invoices.find(x=>x.id===id);if(confirm('Hapus invoice '+i.invoiceNumber+'?')){data.invoices=data.invoices.filter(x=>x.id!==id);save();render();toast('Invoice dihapus')}}
+function viewInvoice(id){state.viewing=data.invoices.find(i=>i.id===id);openInvoiceModal()}
+function openInvoiceModal(){let i=state.viewing;if(!i)return;let st=statusFor(i);document.getElementById('root').insertAdjacentHTML('beforeend',`<div class="overlay" id="invoiceModal" style="display:flex"><div class="modal"><div class="modalhead no-print"><h2>Preview Invoice</h2><button class="close" onclick="document.getElementById('invoiceModal').remove()">×</button></div>${invoicePaper(i,st)}<div class="actions no-print" style="margin-top:18px"><button class="btn primary" onclick="printInvoice()">Cetak / PDF</button><button class="btn" onclick="shareWA('${i.id}')">Bagikan WhatsApp</button><button class="btn" onclick="editInvoice('${i.id}')">Edit</button></div></div></div>`)}
+function invoicePaper(i,st){return `<div class="invoice-paper relative" id="printArea">${st==='LUNAS'?'<div class="watermark">LUNAS</div>':''}<div class="invoice-head"><div class="invoice-brand"><h2>ADRISYA DECORATION</h2><p>Mahar & Seserahan Banyuwangi</p><p>Wedding Decoration</p></div><div class="invoice-meta"><strong>${esc(i.invoiceNumber)}</strong><br>Tanggal: ${fmtDate(i.invoiceDate)}<br>Tanggal Acara: ${fmtDate(i.eventDate)}<br><br>${badge(st)}</div></div>
+<div class="bill"><div><h4>Bill To</h4><b>${esc(i.customerName)}</b><br>${esc(i.customerPhone)}<br>${esc(i.customerAddress||'-')}</div><div><h4>Catatan</h4>${esc(i.notes||'-')}</div></div>
+<table class="invoice-table"><thead><tr><th>Deskripsi</th><th style="width:70px">Qty</th><th class="right">Harga</th><th class="right">Total</th></tr></thead><tbody>${i.items.map(x=>`<tr><td>${esc(x.name)}</td><td>${x.qty}</td><td class="right">${rupiah(x.price)}</td><td class="right">${rupiah(x.qty*x.price)}</td></tr>`).join('')}</tbody></table>
+<div class="invoice-summary"><div><span>Subtotal</span><b>${rupiah(i.subtotal)}</b></div><div><span>Diskon</span><b>- ${rupiah(i.discount)}</b></div><div><span>DP</span><b>- ${rupiah(i.dp)}</b></div><div><span>Pelunasan</span><b>- ${rupiah(i.settlement)}</b></div><div class="remain"><span>SISA BAYAR</span><b>${rupiah(i.remaining)}</b></div></div>
+<div class="bank"><b>Pembayaran</b><br>${esc(data.settings.bank)} — ${esc(data.settings.accountNumber)}<br>a.n. ${esc(data.settings.accountName)}</div>
+<div class="sign">Hormat Kami,<strong>Adrisya Decoration</strong><em>“Menghias Seserahan dengan Hati, untuk Momen yang Berarti”</em></div></div>`}
+function printInvoice(){window.print()}
+function shareWA(id){let i=data.invoices.find(x=>x.id===id),phone=(i.customerPhone||'').replace(/\D/g,'');let msg=`Halo Kak,%0A%0ABerikut invoice dari Adrisya Decoration.%0A%0ANo. Invoice: ${i.invoiceNumber}%0ATotal: ${rupiah(i.subtotal-i.discount)}%0ADP: ${rupiah(i.dp)}%0ASisa pembayaran: ${rupiah(i.remaining)}%0ATanggal acara: ${fmtDate(i.eventDate)}%0A%0ATerima kasih telah mempercayakan seserahan Anda kepada Adrisya Decoration.`;window.open(`https://wa.me/${phone.startsWith('0')?'62'+phone.slice(1):phone}?text=${msg}`,'_blank')}
+function customersPage(){let q=state.customerSearch.toLowerCase(),arr=data.customers.filter(c=>c.name.toLowerCase().includes(q)||c.phone.includes(q));return `<section class="page"><div class="pagehead"><div><h1>Pelanggan</h1><p class="subtitle">Database customer Adrisya Decoration.</p></div><button class="btn primary" onclick="customerModal()">＋ Pelanggan Baru</button></div><div class="panel"><div class="toolbar mb"><input placeholder="Cari nama / WhatsApp..." value="${esc(state.customerSearch)}" oninput="state.customerSearch=this.value;render()"></div><div class="tablewrap">${arr.length?`<table class="table"><thead><tr><th>Nama</th><th>WhatsApp</th><th>Alamat</th><th>Transaksi</th><th>Total</th><th>Aksi</th></tr></thead><tbody>${arr.map(c=>{let ii=data.invoices.filter(i=>i.customerId===c.id||i.customerPhone===c.phone);return `<tr><td><b>${esc(c.name)}</b></td><td>${esc(c.phone)}</td><td>${esc(c.address||'-')}</td><td>${ii.length}</td><td>${rupiah(ii.reduce((a,i)=>a+i.subtotal-i.discount,0))}</td><td><button class="btn small" onclick="customerModal('${c.id}')">Edit</button> <button class="btn small danger" onclick="deleteCustomer('${c.id}')">Hapus</button></td></tr>`}).join('')}</tbody></table>`:`<div class="empty">Belum ada customer.</div>`}</div></div></section>`}
+function customerModal(id=''){let c=data.customers.find(x=>x.id===id)||{id:'',name:'',phone:'',address:'',notes:''};document.getElementById('root').insertAdjacentHTML('beforeend',`<div class="overlay" id="customerModal" style="display:flex"><div class="modal"><div class="modalhead"><h2>${id?'Edit':'Pelanggan Baru'}</h2><button class="close" onclick="this.closest('.overlay').remove()">×</button></div><div class="formgrid"><div class="field"><label>Nama</label><input id="cName" value="${esc(c.name)}"></div><div class="field"><label>WhatsApp</label><input id="cPhone" value="${esc(c.phone)}"></div><div class="field"><label>Alamat</label><textarea id="cAddress">${esc(c.address)}</textarea></div><div class="field"><label>Catatan</label><textarea id="cNotes">${esc(c.notes)}</textarea></div></div><div class="actions mt"><button class="btn primary" onclick="saveCustomer('${id}')">Simpan</button></div></div></div>`)}
+function saveCustomer(id){let c={id:id||crypto.randomUUID(),name:document.getElementById('cName').value.trim(),phone:document.getElementById('cPhone').value.trim(),address:document.getElementById('cAddress').value.trim(),notes:document.getElementById('cNotes').value.trim(),createdAt:new Date().toISOString()};if(!c.name){toast('Nama wajib diisi');return}let ix=data.customers.findIndex(x=>x.id===id);if(ix>=0)data.customers[ix]=c;else data.customers.push(c);save();document.getElementById('customerModal').remove();render();toast('Customer tersimpan')}
+function deleteCustomer(id){if(confirm('Hapus customer ini?')){data.customers=data.customers.filter(x=>x.id!==id);save();render()}}
+function productsPage(){return `<section class="page"><div class="pagehead"><div><h1>Produk</h1><p class="subtitle">Kelola produk dan harga default.</p></div><button class="btn primary" onclick="productModal()">＋ Produk Baru</button></div><div class="panel"><div class="tablewrap"><table class="table"><thead><tr><th>Produk</th><th>Harga Default</th><th>Status</th><th>Aksi</th></tr></thead><tbody>${data.products.map(p=>`<tr><td><b>${esc(p.name)}</b></td><td>${rupiah(p.defaultPrice)}</td><td>${p.active?'<span class="badge paid">AKTIF</span>':'<span class="badge draft">NONAKTIF</span>'}</td><td><button class="btn small" onclick="productModal('${p.id}')">Edit</button> <button class="btn small" onclick="toggleProduct('${p.id}')">${p.active?'Nonaktifkan':'Aktifkan'}</button></td></tr>`).join('')}</tbody></table></div></div></section>`}
+function productModal(id=''){let p=data.products.find(x=>x.id===id)||{id:'',name:'',defaultPrice:0,active:true};document.getElementById('root').insertAdjacentHTML('beforeend',`<div class="overlay" id="productModal" style="display:flex"><div class="modal"><div class="modalhead"><h2>${id?'Edit Produk':'Produk Baru'}</h2><button class="close" onclick="this.closest('.overlay').remove()">×</button></div><div class="formgrid"><div class="field"><label>Nama Produk</label><input id="pName" value="${esc(p.name)}"></div><div class="field"><label>Harga Default</label><input id="pPrice" type="number" value="${p.defaultPrice}"></div></div><div class="actions mt"><button class="btn primary" onclick="saveProduct('${id}')">Simpan</button></div></div></div>`)}
+function saveProduct(id){let p={id:id||crypto.randomUUID(),name:document.getElementById('pName').value.trim(),defaultPrice:num(document.getElementById('pPrice').value),active:true};if(!p.name){toast('Nama produk wajib diisi');return}let ix=data.products.findIndex(x=>x.id===id);if(ix>=0){p.active=data.products[ix].active;data.products[ix]=p}else data.products.push(p);save();document.getElementById('productModal').remove();render();toast('Produk tersimpan')}
+function toggleProduct(id){let p=data.products.find(x=>x.id===id);p.active=!p.active;save();render()}
+function reportsPage(){let inv=data.invoices,total=inv.reduce((a,i)=>a+i.subtotal-i.discount,0),dp=inv.reduce((a,i)=>a+i.dp,0),set=inv.reduce((a,i)=>a+i.settlement,0),out=inv.reduce((a,i)=>a+i.remaining,0);let months=[];for(let m=0;m<6;m++){let d=new Date();d.setMonth(d.getMonth()-m);let key=d.toISOString().slice(0,7);months.unshift({key,val:inv.filter(i=>i.invoiceDate.startsWith(key)).reduce((a,i)=>a+i.subtotal-i.discount,0)})}let max=Math.max(...months.map(x=>x.val),1);return `<section class="page"><div class="pagehead"><div><h1>Laporan</h1><p class="subtitle">Ringkasan performa transaksi Adrisya Decoration.</p></div><select class="btn" onchange="toast('Filter '+this.value+' dipilih')"><option>Periode: Semua Data</option><option>Hari ini</option><option>Minggu ini</option><option>Bulan ini</option><option>Custom tanggal</option></select></div><div class="grid4"><div class="stat"><div class="statlabel">Total Invoice</div><div class="statvalue">${inv.length}</div></div><div class="stat"><div class="statlabel">Total Penjualan</div><div class="statvalue">${rupiah(total)}</div></div><div class="stat"><div class="statlabel">Total DP</div><div class="statvalue">${rupiah(dp)}</div></div><div class="stat"><div class="statlabel">Belum Dibayar</div><div class="statvalue">${rupiah(out)}</div></div></div><div class="two"><div class="panel"><h2 class="section-title">Penjualan 6 Bulan Terakhir</h2><div class="chart">${months.map(x=>`<div class="bar" style="height:${Math.max(5,x.val/max*180)}px" title="${rupiah(x.val)}"><span>${x.key.slice(5)}</span></div>`).join('')}</div></div><div class="panel"><h2 class="section-title">Pembayaran</h2><div class="kpi"><div class="mini"><small>DP</small><strong>${rupiah(dp)}</strong></div><div class="mini"><small>Pelunasan</small><strong>${rupiah(set)}</strong></div><div class="mini"><small>Outstanding</small><strong>${rupiah(out)}</strong></div></div></div></div></section>`}
+function settingsPage(){return `<section class="page"><div class="pagehead"><div><h1>Pengaturan Adrisya Decoration</h1><p class="subtitle">Identitas bisnis, rekening, dan keamanan.</p></div></div><div class="panel"><h2 class="section-title">Identitas Bisnis</h2><div class="formgrid"><div class="field"><label>Nama Bisnis</label><input id="sBusiness" value="${esc(data.settings.businessName)}"></div><div class="field"><label>Kategori</label><input id="sCategory" value="${esc(data.settings.category)}"></div><div class="field"><label>Lokasi</label><input id="sLocation" value="${esc(data.settings.location)}"></div><div class="field"><label>WhatsApp</label><input id="sPhone" value="${esc(data.settings.phone)}"></div><div class="field"><label>Instagram</label><input id="sInstagram" value="${esc(data.settings.instagram)}"></div><div class="field"><label>TikTok</label><input id="sTiktok" value="${esc(data.settings.tiktok)}"></div></div></div>
+<div class="panel mt"><h2 class="section-title">Pembayaran</h2><div class="formgrid"><div class="field"><label>Bank</label><input id="sBank" value="${esc(data.settings.bank)}"></div><div class="field"><label>Nomor Rekening</label><input id="sAccount" value="${esc(data.settings.accountNumber)}"></div><div class="field"><label>Atas Nama</label><input id="sAccountName" value="${esc(data.settings.accountName)}"></div></div></div>
+<div class="panel mt"><h2 class="section-title">Nomor Invoice & Keamanan</h2><div class="formgrid"><div class="field"><label>Prefix Invoice</label><input id="sPrefix" value="${esc(data.settings.invoicePrefix)}"></div><div class="field"><label>Nomor Urut Terakhir</label><input id="sLast" type="number" value="${data.settings.lastInvoiceNumber}"></div><div class="field"><label>Username Admin</label><input id="sUser" value="${esc(data.settings.username)}"></div><div class="field"><label>Password Admin</label><input id="sPass" type="password" placeholder="Isi jika ingin mengganti"></div></div><div class="actions mt"><button class="btn primary" onclick="saveSettings()">Simpan Pengaturan</button></div></div>
+<div class="panel mt"><h2 class="section-title">Brand Copy</h2><p style="margin:0;color:#555"><b>Tagline:</b> “Menghias Seserahan dengan Hati, untuk Momen yang Berarti”</p><p style="color:#555"><b>Slogan:</b> “Percayakan Seserahan Anda kepada yang Berpengalaman.”</p></div></section>`}
+function saveSettings(){Object.assign(data.settings,{businessName:document.getElementById('sBusiness').value,category:document.getElementById('sCategory').value,location:document.getElementById('sLocation').value,phone:document.getElementById('sPhone').value,instagram:document.getElementById('sInstagram').value,tiktok:document.getElementById('sTiktok').value,bank:document.getElementById('sBank').value,accountNumber:document.getElementById('sAccount').value,accountName:document.getElementById('sAccountName').value,invoicePrefix:document.getElementById('sPrefix').value,lastInvoiceNumber:num(document.getElementById('sLast').value),username:document.getElementById('sUser').value});let p=document.getElementById('sPass').value;if(p)data.settings.password=p;save();render();toast('Pengaturan tersimpan')}
+render();
+</script>
+</body>
+</html>'''
+path=Path("/mnt/data/adrisya-decoration/index.html")
+path.parent.mkdir(parents=True, exist_ok=True)
+path.write_text(html, encoding="utf-8")
+print(f"Created: {path}")
+print("Single-file GitHub Pages website with localStorage database, login, invoices, customers, products, reports, settings, print/PDF, and WhatsApp.")
