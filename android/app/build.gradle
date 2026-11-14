@@ -9,8 +9,8 @@ android {
         applicationId 'com.adrisya.invoice'
         minSdk 26
         targetSdk 34
-        versionCode 1
-        versionName '1.0'
+        versionCode 2
+        versionName '1.1'
     }
     buildTypes {
         release { minifyEnabled false }
@@ -24,3 +24,48 @@ android {
 dependencies {
     implementation 'androidx.core:core:1.13.1'
 }
+
+// Hasilkan ikon launcher dari logo asli (app/logo.b64) memakai ImageIO bawaan JDK.
+tasks.register('genIcons') {
+    def b64File = file('logo.b64')
+    inputs.file(b64File)
+    outputs.upToDateWhen { false }
+    doLast {
+        def bytes = java.util.Base64.getMimeDecoder().decode(b64File.getText('UTF-8'))
+        def src = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(bytes))
+        def resDir = file('src/main/res')
+        def densities = ['mdpi': 48, 'hdpi': 72, 'xhdpi': 96, 'xxhdpi': 144, 'xxxhdpi': 192]
+        def fgDensities = ['mdpi': 108, 'hdpi': 162, 'xhdpi': 216, 'xxhdpi': 324, 'xxxhdpi': 432]
+        def draw = { int size, boolean round, boolean fg ->
+            def img = new java.awt.image.BufferedImage(size, size, java.awt.image.BufferedImage.TYPE_INT_ARGB)
+            def g = img.createGraphics()
+            g.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR)
+            g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON)
+            if (round) g.setClip(new java.awt.geom.Ellipse2D.Float(0, 0, size, size))
+            if (fg) {
+                g.setColor(java.awt.Color.BLACK)
+                g.fillRect(0, 0, size, size)
+                int inner = (int) (size * 0.78)
+                int off = (int) ((size - inner) / 2)
+                g.drawImage(src, off, off, inner, inner, null)
+            } else {
+                g.drawImage(src, 0, 0, size, size, null)
+            }
+            g.dispose()
+            return img
+        }
+        densities.each { name, size ->
+            def dir = new File(resDir, "mipmap-${name}")
+            dir.mkdirs()
+            javax.imageio.ImageIO.write(draw(size, false, false), 'png', new File(dir, 'ic_launcher.png'))
+            javax.imageio.ImageIO.write(draw(size, true, false), 'png', new File(dir, 'ic_launcher_round.png'))
+        }
+        fgDensities.each { name, size ->
+            def dir = new File(resDir, "mipmap-${name}")
+            dir.mkdirs()
+            javax.imageio.ImageIO.write(draw(size, false, true), 'png', new File(dir, 'ic_launcher_foreground.png'))
+        }
+        logger.lifecycle('Ikon launcher dibuat dari logo asli')
+    }
+}
+tasks.named('preBuild') { dependsOn('genIcons') }
