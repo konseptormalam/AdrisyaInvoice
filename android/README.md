@@ -26,3 +26,5 @@ Update fitur aplikasi web TIDAK perlu build APK ulang — aplikasi membuka versi
    **Pilih Printer Bluetooth** → ketuk nama printer.
 3. Ketuk **Cetak Sekarang**. Printer yang dipilih diingat untuk print berikutnya
    (bisa diganti kapan pun, atau diatur di Pengaturan aplikasi).
+
+Build APK berjalan otomatis di GitHub Actions setiap ada perubahan pada folder ini.
