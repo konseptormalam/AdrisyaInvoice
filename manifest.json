@@ -1,0 +1,12 @@
+{
+  "name": "Adrisya Invoice",
+  "short_name": "Adrisya",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#fbfaf7",
+  "theme_color": "#C5A059",
+  "icons": [
+    {"src": "https://gemini-gateway-eight.vercel.app/api/adrisya-icon", "sizes": "384x384", "type": "image/png", "purpose": "any"}
+  ]
+}
