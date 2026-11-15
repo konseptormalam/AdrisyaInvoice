@@ -163,7 +163,23 @@ class Bridge(private val activity: Activity, private val web: WebView) {
                         cm.setPrimaryClip(ClipData.newPlainText("Pesan Invoice", text))
                         toast("Pesan invoice tersalin - tempel di chat bila teks belum muncul")
                     } catch (e: Exception) { }
-                    activity.startActivity(Intent.createChooser(intent, "Kirim Invoice"))
+                    var terkirim = false
+                    if (phone.isNotEmpty()) {
+                        for (pkg in listOf("com.whatsapp", "com.whatsapp.w4b")) {
+                            try {
+                                val wa = Intent(intent)
+                                wa.setPackage(pkg)
+                                wa.putExtra("jid", phone + "@s.whatsapp.net")
+                                activity.startActivity(wa)
+                                terkirim = true
+                                break
+                            } catch (e: Exception) { }
+                        }
+                    }
+                    if (!terkirim) {
+                        try { activity.startActivity(Intent.createChooser(intent, "Kirim Invoice")) }
+                        catch (e: Exception) { toast("Tidak ada aplikasi untuk mengirim") }
+                    }
                 }
             } catch (e: Exception) {
                 toast("Gagal menyiapkan PDF: " + (e.message ?: ""))
