@@ -16,6 +16,7 @@ import android.webkit.WebViewClient
 class MainActivity : Activity() {
     private lateinit var web: WebView
     private var fileCallback: ValueCallback<Array<Uri>>? = null
+    private lateinit var bridge: Bridge
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -36,7 +37,8 @@ class MainActivity : Activity() {
         s.loadWithOverviewMode = true
         s.useWideViewPort = false
         s.mediaPlaybackRequiresUserGesture = false
-        web.addJavascriptInterface(Bridge(this, web), "AdrisyaBridge")
+        bridge = Bridge(this, web)
+        web.addJavascriptInterface(bridge, "AdrisyaBridge")
         web.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, req: WebResourceRequest): Boolean {
                 val u = req.url.toString()
@@ -68,6 +70,11 @@ class MainActivity : Activity() {
             }
         }
         web.loadUrl("https://konseptormalam.github.io/AdrisyaInvoice/")
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::bridge.isInitialized) bridge.onAppResume()
     }
 
     private fun openExternal(u: String) {
