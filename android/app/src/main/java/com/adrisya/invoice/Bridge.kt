@@ -143,9 +143,7 @@ class Bridge(private val activity: Activity, private val web: WebView) {
         }.start()
     }
 
-    @Volatile private var pendingPdfUri: Uri? = null
-    @Volatile private var pendingPdfPhone: String = ""
-    @Volatile private var pendingPdfAt: Long = 0
+    private fun pendingPrefs() = activity.getSharedPreferences("adrisya_pending", Context.MODE_PRIVATE)
 
     @JavascriptInterface
     fun sharePdf(b64: String, filename: String, text: String, phone: String) {
@@ -161,9 +159,11 @@ class Bridge(private val activity: Activity, private val web: WebView) {
                         cm.setPrimaryClip(ClipData.newPlainText("Pesan Invoice", text))
                     } catch (e: Exception) { }
                     if (phone.isNotEmpty() && text.isNotEmpty()) {
-                        pendingPdfUri = uri
-                        pendingPdfPhone = phone
-                        pendingPdfAt = System.currentTimeMillis()
+                        pendingPrefs().edit()
+                            .putString("path", f.absolutePath)
+                            .putString("phone", phone)
+                            .putLong("at", System.currentTimeMillis())
+                            .apply()
                         toast("Kirim pesan teksnya dulu di WhatsApp, lalu KEMBALI ke aplikasi ini - PDF menyusul otomatis ke chat yang sama")
                         shareText(text, phone)
                     } else {
@@ -199,14 +199,23 @@ class Bridge(private val activity: Activity, private val web: WebView) {
         }
     }
 
+    @JavascriptInterface
+    fun resumePendingPdf() {
+        activity.runOnUiThread { onAppResume() }
+    }
+
     fun onAppResume() {
-        val uri = pendingPdfUri ?: return
-        val phone = pendingPdfPhone
-        val age = System.currentTimeMillis() - pendingPdfAt
-        pendingPdfUri = null
-        pendingPdfPhone = ""
-        pendingPdfAt = 0
-        if (age > 10 * 60 * 1000) return
+        val prefs = pendingPrefs()
+        val path = prefs.getString("path", null) ?: return
+        val phone = prefs.getString("phone", "") ?: ""
+        val age = System.currentTimeMillis() - prefs.getLong("at", 0)
+        prefs.edit().clear().apply()
+        if (age > 30 * 60 * 1000) return
+        val f = File(path)
+        if (!f.exists()) return
+        val uri = try {
+            FileProvider.getUriForFile(activity, activity.packageName + ".fileprovider", f)
+        } catch (e: Exception) { return }
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "application/pdf"
             putExtra(Intent.EXTRA_STREAM, uri)
