@@ -143,6 +143,10 @@ class Bridge(private val activity: Activity, private val web: WebView) {
         }.start()
     }
 
+    @Volatile private var pendingPdfUri: Uri? = null
+    @Volatile private var pendingPdfPhone: String = ""
+    @Volatile private var pendingPdfAt: Long = 0
+
     @JavascriptInterface
     fun sharePdf(b64: String, filename: String, text: String, phone: String) {
         Thread {
@@ -151,37 +155,76 @@ class Bridge(private val activity: Activity, private val web: WebView) {
                 val f = File(dir, filename)
                 f.writeBytes(Base64.decode(b64, Base64.DEFAULT))
                 val uri = FileProvider.getUriForFile(activity, activity.packageName + ".fileprovider", f)
-                val intent = Intent(Intent.ACTION_SEND).apply {
-                    type = "application/pdf"
-                    putExtra(Intent.EXTRA_STREAM, uri)
-                    putExtra(Intent.EXTRA_TEXT, text)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
                 activity.runOnUiThread {
                     try {
                         val cm = activity.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                         cm.setPrimaryClip(ClipData.newPlainText("Pesan Invoice", text))
-                        toast("Pesan invoice tersalin - tempel di chat bila teks belum muncul")
                     } catch (e: Exception) { }
-                    var terkirim = false
-                    for (pkg in listOf("com.whatsapp", "com.whatsapp.w4b")) {
-                        try {
-                            val wa = Intent(intent)
-                            wa.setPackage(pkg)
-                            activity.startActivity(wa)
-                            terkirim = true
-                            break
-                        } catch (e: Exception) { }
-                    }
-                    if (!terkirim) {
-                        try { activity.startActivity(Intent.createChooser(intent, "Kirim Invoice")) }
-                        catch (e: Exception) { toast("Tidak ada aplikasi untuk mengirim") }
+                    if (phone.isNotEmpty() && text.isNotEmpty()) {
+                        pendingPdfUri = uri
+                        pendingPdfPhone = phone
+                        pendingPdfAt = System.currentTimeMillis()
+                        toast("Kirim pesan teksnya dulu di WhatsApp, lalu KEMBALI ke aplikasi ini - PDF menyusul otomatis ke chat yang sama")
+                        shareText(text, phone)
+                    } else {
+                        sharePdfChooser(uri, text)
                     }
                 }
             } catch (e: Exception) {
                 toast("Gagal menyiapkan PDF: " + (e.message ?: ""))
             }
         }.start()
+    }
+
+    private fun sharePdfChooser(uri: Uri, text: String) {
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "application/pdf"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            putExtra(Intent.EXTRA_TEXT, text)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        var terkirim = false
+        for (pkg in listOf("com.whatsapp", "com.whatsapp.w4b")) {
+            try {
+                val wa = Intent(intent)
+                wa.setPackage(pkg)
+                activity.startActivity(wa)
+                terkirim = true
+                break
+            } catch (e: Exception) { }
+        }
+        if (!terkirim) {
+            try { activity.startActivity(Intent.createChooser(intent, "Kirim Invoice")) }
+            catch (e: Exception) { toast("Tidak ada aplikasi untuk mengirim") }
+        }
+    }
+
+    fun onAppResume() {
+        val uri = pendingPdfUri ?: return
+        val phone = pendingPdfPhone
+        val age = System.currentTimeMillis() - pendingPdfAt
+        pendingPdfUri = null
+        pendingPdfPhone = ""
+        pendingPdfAt = 0
+        if (age > 10 * 60 * 1000) return
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "application/pdf"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        var terkirim = false
+        for (pkg in listOf("com.whatsapp", "com.whatsapp.w4b")) {
+            try {
+                val wa = Intent(intent)
+                wa.setPackage(pkg)
+                wa.putExtra("jid", phone + "@s.whatsapp.net")
+                activity.startActivity(wa)
+                terkirim = true
+                break
+            } catch (e: Exception) { }
+        }
+        if (terkirim) toast("PDF siap dikirim ke chat pelanggan - tekan tombol kirim di WhatsApp")
+        else sharePdfChooser(uri, "")
     }
 
     @JavascriptInterface
