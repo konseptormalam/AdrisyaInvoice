@@ -5,6 +5,8 @@ import android.app.Activity
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothSocket
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
@@ -156,6 +158,11 @@ class Bridge(private val activity: Activity, private val web: WebView) {
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
                 activity.runOnUiThread {
+                    try {
+                        val cm = activity.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        cm.setPrimaryClip(ClipData.newPlainText("Pesan Invoice", text))
+                        toast("Pesan invoice tersalin - tempel di chat bila teks belum muncul")
+                    } catch (e: Exception) { }
                     activity.startActivity(Intent.createChooser(intent, "Kirim Invoice"))
                 }
             } catch (e: Exception) {
